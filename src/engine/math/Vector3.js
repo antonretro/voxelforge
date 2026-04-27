@@ -1,154 +1,121 @@
 export class Vector3 {
-	constructor (x = 0, y = 0, z = 0) {
+	constructor(x = 0, y = 0, z = 0) {
 		this.x = x;
 		this.y = y;
 		this.z = z;
 	}
-	set (x = 0, y = 0, z = 0) {
-		this.x = x;
-		this.y = y;
-		this.z = z;
 
+	// ── Factories ───────────────────────────────────────────────────────────
+	static from(v)              { return new Vector3(v.x, v.y, v.z); }
+	static fromArray(a, o = 0) { return new Vector3(a[o], a[o+1], a[o+2]); }
+	static splat(s)             { return new Vector3(s, s, s); }
+
+	// ── In-place setters ────────────────────────────────────────────────────
+	set(x = 0, y = 0, z = 0)   { this.x = x; this.y = y; this.z = z; return this; }
+	copy(v)                     { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+	clone()                     { return new Vector3(this.x, this.y, this.z); }
+	toArray(out = [], o = 0)    { out[o] = this.x; out[o+1] = this.y; out[o+2] = this.z; return out; }
+
+	// ── Arithmetic ──────────────────────────────────────────────────────────
+	add(v)          { this.x += v.x; this.y += v.y; this.z += v.z; return this; }
+	addScalar(s)    { this.x += s;   this.y += s;   this.z += s;   return this; }
+	sub(v)          { this.x -= v.x; this.y -= v.y; this.z -= v.z; return this; }
+	subtract(v)     { return this.sub(v); }
+	scale(s)        { this.x *= s;   this.y *= s;   this.z *= s;   return this; }
+	multiply(s)     { return this.scale(s); }
+	divide(s)       { return this.scale(1 / s); }
+	negate()        { return this.scale(-1); }
+	inverse()       { return this.negate(); }
+
+	addScaled(v, s) {
+		this.x += v.x * s;
+		this.y += v.y * s;
+		this.z += v.z * s;
 		return this;
 	}
-	copy ({x = 0, y = 0, z = 0}) {
-		this.x = x;
-		this.y = y;
-		this.z = z;
 
-		return this;
-	}
-	applyQuaternion (q) {
-		const x = this.x, y = this.y, z = this.z;
-		const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+	// ── Component-wise ──────────────────────────────────────────────────────
+	floor()  { this.x = Math.floor(this.x); this.y = Math.floor(this.y); this.z = Math.floor(this.z); return this; }
+	ceil()   { this.x = Math.ceil(this.x);  this.y = Math.ceil(this.y);  this.z = Math.ceil(this.z);  return this; }
+	abs()    { this.x = Math.abs(this.x);   this.y = Math.abs(this.y);   this.z = Math.abs(this.z);   return this; }
+	power(n) { this.x = this.x**n; this.y = this.y**n; this.z = this.z**n; return this; }
 
-		// calculate quat * vector
-		const ix = qw * x + qy * z - qz * y;
-		const iy = qw * y + qz * x - qx * z;
-		const iz = qw * z + qx * y - qy * x;
-		const iw = - qx * x - qy * y - qz * z;
-
-		// calculate result * inverse quat
-		this.x = ix * qw + iw * - qx + iy * - qz - iz * - qy;
-		this.y = iy * qw + iw * - qy + iz * - qx - ix * - qz;
-		this.z = iz * qw + iw * - qz + ix * - qy - iy * - qx;
-
+	clamp(min, max) {
+		this.x = Math.max(min, Math.min(max, this.x));
+		this.y = Math.max(min, Math.min(max, this.y));
+		this.z = Math.max(min, Math.min(max, this.z));
 		return this;
 	}
 
-	clone () {
-		return new Vector3(this.x, this.y, this.z);
-	}
-	add ({x = 0, y = 0, z = 0}) {
-		this.x += x;
-		this.y += y;
-		this.z += z;
-
+	lerp(v, t) {
+		this.x += (v.x - this.x) * t;
+		this.y += (v.y - this.y) * t;
+		this.z += (v.z - this.z) * t;
 		return this;
 	}
-	sub ({x = 0, y = 0, z = 0}) {
-		this.x -= x;
-		this.y -= y;
-		this.z -= z;
 
+	// ── Geometry ────────────────────────────────────────────────────────────
+	lengthSq()       { return this.x*this.x + this.y*this.y + this.z*this.z; }
+	length()         { return Math.sqrt(this.lengthSq()); }
+	distanceTo(v)    { return Math.sqrt((this.x-v.x)**2 + (this.y-v.y)**2 + (this.z-v.z)**2); }
+	distanceToSq(v)  { return (this.x-v.x)**2 + (this.y-v.y)**2 + (this.z-v.z)**2; }
+
+	dot(v)   { return this.x*v.x + this.y*v.y + this.z*v.z; }
+	dot2(v)  { return this.x*v.x + this.y*v.y; }
+
+	cross(v) {
+		const ax = this.x, ay = this.y, az = this.z;
+		this.x = ay*v.z - az*v.y;
+		this.y = az*v.x - ax*v.z;
+		this.z = ax*v.y - ay*v.x;
 		return this;
 	}
-	subtract (v) {
-		return this.sub(v);
-	}
-	distanceTo (v) {
-		return Math.sqrt((this.x - v.x) ** 2 + (this.y - v.y) ** 2 + (this.z - v.z) ** 2);
-	}
-	multiply (s) {
-		this.x *= s;
-		this.y *= s;
-		this.z *= s;
 
+	normalise() {
+		const len = this.length();
+		return len > 0 ? this.scale(1 / len) : this;
+	}
+	normalize() { return this.normalise(); }
+
+	reflect(normal) {
+		const d = 2 * this.dot(normal);
+		this.x -= d * normal.x;
+		this.y -= d * normal.y;
+		this.z -= d * normal.z;
 		return this;
 	}
-	divide (s) {
-		const d = 1 / s;
 
-		this.x *= d;
-		this.y *= d;
-		this.z *= d;
+	angleTo(v) {
+		const denom = Math.sqrt(this.lengthSq() * v.x*v.x + v.y*v.y + v.z*v.z);
+		if (denom === 0) return 0;
+		return Math.acos(Math.max(-1, Math.min(1, this.dot(v) / denom)));
+	}
 
+	applyQuaternion(q) {
+		const { x, y, z } = this;
+		const { x: qx, y: qy, z: qz, w: qw } = q;
+		const ix =  qw*x + qy*z - qz*y;
+		const iy =  qw*y + qz*x - qx*z;
+		const iz =  qw*z + qx*y - qy*x;
+		const iw = -qx*x - qy*y - qz*z;
+		this.x = ix*qw + iw*-qx + iy*-qz - iz*-qy;
+		this.y = iy*qw + iw*-qy + iz*-qx - ix*-qz;
+		this.z = iz*qw + iw*-qz + ix*-qy - iy*-qx;
 		return this;
 	}
-	inverse () {
-		return this.multiply(-1);
-	}
-	power (n) {
-		this.x = Math.pow(this.x, n);
-		this.y = Math.pow(this.y, n);
-		this.z = Math.pow(this.z, n);
 
-		return this;
-	}
-	normalise () {
-		let d = this.length();
-		d = d == 0 ? 1 : 1 / d;
-
-		this.x *= d;
-		this.y *= d;
-		this.z *= d;
-
-		return this;
-	}
-	applyQuaternion ({x = 0, y = 0, z = 0, w = 1}) {
-		// calculate quat * vector
-
-		const ix = w * this.x + y * this.z - z * this.y;
-		const iy = w * this.y + z * this.x - x * this.z;
-		const iz = w * this.z + x * this.y - y * this.x;
-		const iw = - x * this.x - y * this.y - z * this.z;
-
-		// calculate result * inverse quat
-
-		this.x = ix * w + iw * - x + iy * - z - iz * - y;
-		this.y = iy * w + iw * - y + iz * - x - ix * - z;
-		this.z = iz * w + iw * - z + ix * - y - iy * - x;
-
-		return this;
-
-	}
-	lerp (v, s) {
-		this.x += (v.x - this.x) * s;
-		this.y += (v.y - this.y) * s;
-		this.z += (v.z - this.z) * s;
-
-		return this;
-	}
-	length () {
-		return Math.sqrt(this.x **2 + this.y ** 2 + this.z ** 2);
-	}
-	lengthSq () {
-		return this.x **2 + this.y ** 2 + this.z ** 2;
-	}
-	isNaN () {
-		return isNaN(this.x) || isNaN(this.y) || isNaN(this.z);
-	}
-	floor () {
-		this.x = Math.floor(this.x);
-		this.y = Math.floor(this.y);
-		this.z = Math.floor(this.z);
-
-		return this;
-	}
-	dot2 ({ x, y }) {
-		return this.x * x + this.y * y;
-	}
-	dot ({x, y, z}) {
-		return this.x * x + this.y * y + this.z * z;
-	}
-	equals ({x, y, z}) {
-		return this.x === x && this.y === y && this.z === z;
-	}
+	// ── Predicates ──────────────────────────────────────────────────────────
+	equals(v)  { return this.x === v.x && this.y === v.y && this.z === v.z; }
+	isZero()   { return this.x === 0 && this.y === 0 && this.z === 0; }
+	isNaN()    { return isNaN(this.x) || isNaN(this.y) || isNaN(this.z); }
 }
 
-Vector3.UP = new Vector3(0, 1, 0);
-Vector3.DOWN = new Vector3(0, -1, 0);
-Vector3.LEFT = new Vector3(-1, 0, 0);
-Vector3.RIGHT = new Vector3(1, 0, 0);
-Vector3.FORWARD = new Vector3(0, 0, 1);
-Vector3.BACKWARD = new Vector3(0, 0, -1);
+// Shared direction constants (read-only)
+Vector3.UP       = Object.freeze(new Vector3( 0,  1,  0));
+Vector3.DOWN     = Object.freeze(new Vector3( 0, -1,  0));
+Vector3.LEFT     = Object.freeze(new Vector3(-1,  0,  0));
+Vector3.RIGHT    = Object.freeze(new Vector3( 1,  0,  0));
+Vector3.FORWARD  = Object.freeze(new Vector3( 0,  0,  1));
+Vector3.BACKWARD = Object.freeze(new Vector3( 0,  0, -1));
+Vector3.ZERO     = Object.freeze(new Vector3( 0,  0,  0));
+Vector3.ONE      = Object.freeze(new Vector3( 1,  1,  1));

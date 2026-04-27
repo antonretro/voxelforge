@@ -1,269 +1,191 @@
+// Column-major 4×4 matrix backed by Float32Array for direct WebGL upload.
+// Layout: elements[col * 4 + row]
 export class Matrix4 {
-	constructor () {
-		this.elements = [
+	constructor() {
+		this.elements = new Float32Array([
 			1, 0, 0, 0,
 			0, 1, 0, 0,
 			0, 0, 1, 0,
-			0, 0, 0, 1
-		];
+			0, 0, 0, 1,
+		]);
 	}
 
-	copy (mat) {
-		this.elements[0] = mat.elements[0];
-		this.elements[1] = mat.elements[1];
-		this.elements[2] = mat.elements[2];
-		this.elements[3] = mat.elements[3];
-		this.elements[4] = mat.elements[4];
-		this.elements[5] = mat.elements[5];
-		this.elements[6] = mat.elements[6];
-		this.elements[7] = mat.elements[7];
-		this.elements[8] = mat.elements[8];
-		this.elements[9] = mat.elements[9];
-		this.elements[10] = mat.elements[10];
-		this.elements[11] = mat.elements[11];
-		this.elements[12] = mat.elements[12];
-		this.elements[13] = mat.elements[13];
-		this.elements[14] = mat.elements[14];
-		this.elements[15] = mat.elements[15];
+	// ── Factories ───────────────────────────────────────────────────────────
+	static identity()          { return new Matrix4(); }
+	static fromArray(a, o = 0) { return new Matrix4().setFromArray(a, o); }
 
+	setFromArray(a, o = 0) {
+		for (let i = 0; i < 16; i++) this.elements[i] = a[o + i];
 		return this;
 	}
 
-	clone () {
-		return new Matrix4().copy(this);
-	}
-
-	identity () {
-		return this.copy(Matrix4.IDENTITY);
-	}
-
-	multiply (mat) {
-		const a11 = this.elements[ 0 ],
-			a12 = this.elements[ 4 ],
-			a13 = this.elements[ 8 ],
-			a14 = this.elements[ 12 ],
-
-			a21 = this.elements[ 1 ],
-			a22 = this.elements[ 5 ],
-			a23 = this.elements[ 9 ],
-			a24 = this.elements[ 13 ],
-
-			a31 = this.elements[ 2 ],
-			a32 = this.elements[ 6 ],
-			a33 = this.elements[ 10 ],
-			a34 = this.elements[ 14 ],
-
-			a41 = this.elements[ 3 ],
-			a42 = this.elements[ 7 ],
-			a43 = this.elements[ 11 ],
-			a44 = this.elements[ 15 ];
-
-		const b11 = mat.elements[ 0 ],
-			b12 = mat.elements[ 4 ],
-			b13 = mat.elements[ 8 ],
-			b14 = mat.elements[ 12 ],
-
-			b21 = mat.elements[ 1 ],
-			b22 = mat.elements[ 5 ],
-			b23 = mat.elements[ 9 ],
-			b24 = mat.elements[ 13 ],
-
-			b31 = mat.elements[ 2 ],
-			b32 = mat.elements[ 6 ],
-			b33 = mat.elements[ 10 ],
-			b34 = mat.elements[ 14 ],
-
-			b41 = mat.elements[ 3 ],
-			b42 = mat.elements[ 7 ],
-			b43 = mat.elements[ 11 ],
-			b44 = mat.elements[ 15 ];
-
-		this.elements[ 0 ] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
-		this.elements[ 4 ] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
-		this.elements[ 8 ] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
-		this.elements[ 12 ] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
-
-		this.elements[ 1 ] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
-		this.elements[ 5 ] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
-		this.elements[ 9 ] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
-		this.elements[ 13 ] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
-
-		this.elements[ 2 ] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
-		this.elements[ 6 ] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
-		this.elements[ 10 ] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
-		this.elements[ 14 ] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
-
-		this.elements[ 3 ] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
-		this.elements[ 7 ] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
-		this.elements[ 11 ] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
-		this.elements[ 15 ] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
-
+	// ── Copy / clone ────────────────────────────────────────────────────────
+	copy(m) {
+		this.elements.set(m.elements);
 		return this;
 	}
 
-	compose (position, quaternion, scale) {
-		const x2 = quaternion.x + quaternion.x;
-		const y2 = quaternion.y + quaternion.y;
-		const z2 = quaternion.z + quaternion.z;
-		const w2 = quaternion.w + quaternion.w;
+	clone() { return new Matrix4().copy(this); }
 
-		const xx = quaternion.x * x2;
-		const xy = quaternion.x * y2;
-		const xz = quaternion.x * z2;
-		const yy = quaternion.y * y2;
-		const yz = quaternion.y * z2;
-		const zz = quaternion.z * z2;
-		const wx = quaternion.w * x2;
-		const wy = quaternion.w * y2;
-		const wz = quaternion.w * z2;
-
-		this.elements[0] = (1 - (yy + zz)) * scale.x;
-		this.elements[1] = (xy + wz) * scale.x;
-		this.elements[2] = (xz - wy) * scale.x;
-		this.elements[3] = 0;
-		this.elements[4] = (xy - wz) * scale.y;
-		this.elements[5] = (1 - (xx + zz)) * scale.y;
-		this.elements[6] = (yz + wx) * scale.y;
-		this.elements[7] = 0;
-		this.elements[8] = (xz + wy) * scale.z;
-		this.elements[9] = (yz - wx) * scale.z;
-		this.elements[10] = (1 - (xx + yy)) * scale.z;
-		this.elements[11] = 0;
-		this.elements[12] = position.x;
-		this.elements[13] = position.y;
-		this.elements[14] = position.z;
-		this.elements[15] = 1;
-
-		return this;
-	}
-
-	rotate ({x = 0, y = 0, z = 0, w = 1}) {
-		const x2 = x + x;
-		const y2 = y + y;
-		const z2 = z + z;
-		const w2 = w + w;
-
-		const xx = x * x2;
-		const xy = x * y2;
-		const xz = x * z2;
-		const yy = y * y2;
-		const yz = y * z2;
-		const zz = z * z2;
-		const wx = w * x2;
-		const wy = w * y2;
-		const wz = w * z2;
-
-		this.elements[0] = 1 - (yy + zz);
-		this.elements[1] = xy + wz;
-		this.elements[2] = xz - wy;
-		this.elements[3] = 0;
-		this.elements[4] = xy - wz;
-		this.elements[5] = 1 - (xx + zz);
-		this.elements[6] = yz + wx;
-		this.elements[7] = 0;
-		this.elements[8] = xz + wy;
-		this.elements[9] = yz - wx;
-		this.elements[10] = 1 - (xx + yy);
-		this.elements[11] = 0;
-		this.elements[12] = 0;
-		this.elements[13] = 0;
-		this.elements[14] = 0;
-		this.elements[15] = 1;
-
-		return this;
-	}
-
-	scale ({x = 1, y = 1, z = 1}) {
-		this.elements[0] *= x;
-		this.elements[1] *= x;
-		this.elements[2] *= x;
-		this.elements[3] *= x;
-		this.elements[4] *= y;
-		this.elements[5] *= y;
-		this.elements[6] *= y;
-		this.elements[7] *= y;
-		this.elements[8] *= z;
-		this.elements[9] *= z;
-		this.elements[10] *= z;
-		this.elements[11] *= z;
-
-		return this;
-	}
-
-	inverse () {
-		const te = this.elements,
-			n11 = te[ 0 ], n21 = te[ 1 ], n31 = te[ 2 ], n41 = te[ 3 ],
-			n12 = te[ 4 ], n22 = te[ 5 ], n32 = te[ 6 ], n42 = te[ 7 ],
-			n13 = te[ 8 ], n23 = te[ 9 ], n33 = te[ 10 ], n43 = te[ 11 ],
-			n14 = te[ 12 ], n24 = te[ 13 ], n34 = te[ 14 ], n44 = te[ 15 ],
-
-			t11 = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44,
-			t12 = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44,
-			t13 = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44,
-			t14 = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
-
-		const det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14;
-
-		if ( det === 0 ) return this.identity();
-
-		const detInv = 1 / det;
-
-		te[ 0 ] = t11 * detInv;
-		te[ 1 ] = ( n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44 ) * detInv;
-		te[ 2 ] = ( n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44 ) * detInv;
-		te[ 3 ] = ( n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43 ) * detInv;
-
-		te[ 4 ] = t12 * detInv;
-		te[ 5 ] = ( n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44 ) * detInv;
-		te[ 6 ] = ( n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44 ) * detInv;
-		te[ 7 ] = ( n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43 ) * detInv;
-
-		te[ 8 ] = t13 * detInv;
-		te[ 9 ] = ( n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44 ) * detInv;
-		te[ 10 ] = ( n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44 ) * detInv;
-		te[ 11 ] = ( n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43 ) * detInv;
-
-		te[ 12 ] = t14 * detInv;
-		te[ 13 ] = ( n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34 ) * detInv;
-		te[ 14 ] = ( n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34 ) * detInv;
-		te[ 15 ] = ( n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33 ) * detInv;
-
-		return this;
-	}
-
-	perspective (left, right, top, bottom, near, far) {
-		this.elements[ 0 ] = 2 * near / ( right - left );
-		this.elements[ 4 ] = 0;
-		this.elements[ 8 ] = ( right + left ) / ( right - left );
-		this.elements[ 12 ] = 0;
-		this.elements[ 1 ] = 0;
-		this.elements[ 5 ] = 2 * near / ( top - bottom );
-		this.elements[ 9 ] = ( top + bottom ) / ( top - bottom );
-		this.elements[ 13 ] = 0;
-		this.elements[ 2 ] = 0;
-		this.elements[ 6 ] = 0;
-		this.elements[ 10 ] = - ( far + near ) / ( far - near );
-		this.elements[ 14 ] = - 2 * far * near / ( far - near );
-		this.elements[ 3 ] = 0;
-		this.elements[ 7 ] = 0;
-		this.elements[ 11 ] = - 1;
-		this.elements[ 15 ] = 0;
-
-		return this;
-	}
-
-	multiplyVector3 (v) {
-		const x = v.x, y = v.y, z = v.z;
+	identity() {
 		const e = this.elements;
+		e[0]=1; e[1]=0; e[2]=0;  e[3]=0;
+		e[4]=0; e[5]=1; e[6]=0;  e[7]=0;
+		e[8]=0; e[9]=0; e[10]=1; e[11]=0;
+		e[12]=0;e[13]=0;e[14]=0; e[15]=1;
+		return this;
+	}
 
-		const w = 1 / ( e[ 3 ] * x + e[ 7 ] * y + e[ 11 ] * z + e[ 15 ] );
+	// ── Multiply ────────────────────────────────────────────────────────────
+	multiply(m) {
+		const a = this.elements, b = m.elements;
+		const [a00,a10,a20,a30, a01,a11,a21,a31, a02,a12,a22,a32, a03,a13,a23,a33] = a;
+		const [b00,b10,b20,b30, b01,b11,b21,b31, b02,b12,b22,b32, b03,b13,b23,b33] = b;
 
-		v.x = ( e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ] ) * w;
-		v.y = ( e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ] ) * w;
-		v.z = ( e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] ) * w;
+		a[0]  = a00*b00 + a01*b10 + a02*b20 + a03*b30;
+		a[1]  = a10*b00 + a11*b10 + a12*b20 + a13*b30;
+		a[2]  = a20*b00 + a21*b10 + a22*b20 + a23*b30;
+		a[3]  = a30*b00 + a31*b10 + a32*b20 + a33*b30;
+		a[4]  = a00*b01 + a01*b11 + a02*b21 + a03*b31;
+		a[5]  = a10*b01 + a11*b11 + a12*b21 + a13*b31;
+		a[6]  = a20*b01 + a21*b11 + a22*b21 + a23*b31;
+		a[7]  = a30*b01 + a31*b11 + a32*b21 + a33*b31;
+		a[8]  = a00*b02 + a01*b12 + a02*b22 + a03*b32;
+		a[9]  = a10*b02 + a11*b12 + a12*b22 + a13*b32;
+		a[10] = a20*b02 + a21*b12 + a22*b22 + a23*b32;
+		a[11] = a30*b02 + a31*b12 + a32*b22 + a33*b32;
+		a[12] = a00*b03 + a01*b13 + a02*b23 + a03*b33;
+		a[13] = a10*b03 + a11*b13 + a12*b23 + a13*b33;
+		a[14] = a20*b03 + a21*b13 + a22*b23 + a23*b33;
+		a[15] = a30*b03 + a31*b13 + a32*b23 + a33*b33;
+		return this;
+	}
 
+	// ── Compose from TRS ────────────────────────────────────────────────────
+	compose(pos, quat, scale) {
+		const { x: qx, y: qy, z: qz, w: qw } = quat;
+		const x2 = qx+qx, y2 = qy+qy, z2 = qz+qz;
+		const xx = qx*x2, xy = qx*y2, xz = qx*z2;
+		const yy = qy*y2, yz = qy*z2, zz = qz*z2;
+		const wx = qw*x2, wy = qw*y2, wz = qw*z2;
+		const sx = scale.x, sy = scale.y, sz = scale.z;
+		const e = this.elements;
+		e[0]  = (1-(yy+zz))*sx; e[1]  = (xy+wz)*sx;   e[2]  = (xz-wy)*sx;   e[3]  = 0;
+		e[4]  = (xy-wz)*sy;     e[5]  = (1-(xx+zz))*sy;e[6]  = (yz+wx)*sy;   e[7]  = 0;
+		e[8]  = (xz+wy)*sz;     e[9]  = (yz-wx)*sz;    e[10] = (1-(xx+yy))*sz;e[11] = 0;
+		e[12] = pos.x;           e[13] = pos.y;          e[14] = pos.z;         e[15] = 1;
+		return this;
+	}
+
+	// ── Rotation-only from quaternion ────────────────────────────────────────
+	rotate(q) {
+		const { x, y, z, w } = q;
+		const x2=x+x, y2=y+y, z2=z+z;
+		const xx=x*x2, xy=x*y2, xz=x*z2;
+		const yy=y*y2, yz=y*z2, zz=z*z2;
+		const wx=w*x2, wy=w*y2, wz=w*z2;
+		const e = this.elements;
+		e[0]=1-(yy+zz); e[1]=xy+wz;     e[2]=xz-wy;     e[3]=0;
+		e[4]=xy-wz;     e[5]=1-(xx+zz); e[6]=yz+wx;     e[7]=0;
+		e[8]=xz+wy;     e[9]=yz-wx;     e[10]=1-(xx+yy);e[11]=0;
+		e[12]=0;        e[13]=0;        e[14]=0;         e[15]=1;
+		return this;
+	}
+
+	// ── Non-uniform scale ────────────────────────────────────────────────────
+	scale(v) {
+		const e = this.elements;
+		e[0]*=v.x; e[1]*=v.x; e[2]*=v.x;  e[3]*=v.x;
+		e[4]*=v.y; e[5]*=v.y; e[6]*=v.y;  e[7]*=v.y;
+		e[8]*=v.z; e[9]*=v.z; e[10]*=v.z; e[11]*=v.z;
+		return this;
+	}
+
+	// ── Perspective projection ──────────────────────────────────────────────
+	perspective(left, right, top, bottom, near, far) {
+		const rl = right - left, tb = top - bottom, nf = near - far;
+		const e = this.elements;
+		e[0]=2*near/rl; e[1]=0;         e[2]=0;               e[3]=0;
+		e[4]=0;         e[5]=2*near/tb; e[6]=0;               e[7]=0;
+		e[8]=(right+left)/rl; e[9]=(top+bottom)/tb; e[10]=(far+near)/nf; e[11]=-1;
+		e[12]=0; e[13]=0; e[14]=2*far*near/nf; e[15]=0;
+		return this;
+	}
+
+	// ── Inverse ─────────────────────────────────────────────────────────────
+	inverse() {
+		const e = this.elements;
+		const [m00,m01,m02,m03, m04,m05,m06,m07, m08,m09,m10,m11, m12,m13,m14,m15] = e;
+
+		const b00 = m00*m05 - m01*m04, b01 = m00*m06 - m02*m04;
+		const b02 = m00*m07 - m03*m04, b03 = m01*m06 - m02*m05;
+		const b04 = m01*m07 - m03*m05, b05 = m02*m07 - m03*m06;
+		const b06 = m08*m13 - m09*m12, b07 = m08*m14 - m10*m12;
+		const b08 = m08*m15 - m11*m12, b09 = m09*m14 - m10*m13;
+		const b10 = m09*m15 - m11*m13, b11 = m10*m15 - m11*m14;
+
+		const det = b00*b11 - b01*b10 + b02*b09 + b03*b08 - b04*b07 + b05*b06;
+		if (det === 0) return this.identity();
+		const inv = 1 / det;
+
+		e[0]  = ( m05*b11 - m06*b10 + m07*b09) * inv;
+		e[1]  = (-m01*b11 + m02*b10 - m03*b09) * inv;
+		e[2]  = ( m13*b05 - m14*b04 + m15*b03) * inv;
+		e[3]  = (-m09*b05 + m10*b04 - m11*b03) * inv;
+		e[4]  = (-m04*b11 + m06*b08 - m07*b07) * inv;
+		e[5]  = ( m00*b11 - m02*b08 + m03*b07) * inv;
+		e[6]  = (-m12*b05 + m14*b02 - m15*b01) * inv;
+		e[7]  = ( m08*b05 - m10*b02 + m11*b01) * inv;
+		e[8]  = ( m04*b10 - m05*b08 + m07*b06) * inv;
+		e[9]  = (-m00*b10 + m01*b08 - m03*b06) * inv;
+		e[10] = ( m12*b04 - m13*b02 + m15*b00) * inv;
+		e[11] = (-m08*b04 + m09*b02 - m11*b00) * inv;
+		e[12] = (-m04*b09 + m05*b07 - m06*b06) * inv;
+		e[13] = ( m00*b09 - m01*b07 + m02*b06) * inv;
+		e[14] = (-m12*b03 + m13*b01 - m14*b00) * inv;
+		e[15] = ( m08*b03 - m09*b01 + m10*b00) * inv;
+		return this;
+	}
+
+	// ── Transform a Vector3 (w=1, perspective divide) ────────────────────────
+	multiplyVector3(v) {
+		const e = this.elements;
+		const w = 1 / (e[3]*v.x + e[7]*v.y + e[11]*v.z + e[15]);
+		v.x = (e[0]*v.x + e[4]*v.y + e[8]*v.z  + e[12]) * w;
+		v.y = (e[1]*v.x + e[5]*v.y + e[9]*v.z  + e[13]) * w;
+		v.z = (e[2]*v.x + e[6]*v.y + e[10]*v.z + e[14]) * w;
 		return v;
+	}
+
+	// ── LookAt (camera view matrix) ─────────────────────────────────────────
+	lookAt(eye, target, up) {
+		let fx = eye.x-target.x, fy = eye.y-target.y, fz = eye.z-target.z;
+		let len = Math.sqrt(fx*fx+fy*fy+fz*fz);
+		if (len > 0) { fx/=len; fy/=len; fz/=len; }
+
+		let rx = up.y*fz - up.z*fy, ry = up.z*fx - up.x*fz, rz = up.x*fy - up.y*fx;
+		len = Math.sqrt(rx*rx+ry*ry+rz*rz);
+		if (len > 0) { rx/=len; ry/=len; rz/=len; }
+
+		const ux = fy*rz - fz*ry, uy = fz*rx - fx*rz, uz = fx*ry - fy*rx;
+		const e = this.elements;
+		e[0]=rx; e[1]=ux; e[2]=fx;  e[3]=0;
+		e[4]=ry; e[5]=uy; e[6]=fy;  e[7]=0;
+		e[8]=rz; e[9]=uz; e[10]=fz; e[11]=0;
+		e[12]=-(rx*eye.x+ry*eye.y+rz*eye.z);
+		e[13]=-(ux*eye.x+uy*eye.y+uz*eye.z);
+		e[14]=-(fx*eye.x+fy*eye.y+fz*eye.z);
+		e[15]=1;
+		return this;
+	}
+
+	// ── Extract translation ──────────────────────────────────────────────────
+	getTranslation(out) {
+		out.x = this.elements[12];
+		out.y = this.elements[13];
+		out.z = this.elements[14];
+		return out;
 	}
 }
 
-Matrix4.IDENTITY = new Matrix4();
+Matrix4.IDENTITY = Object.freeze(new Matrix4());

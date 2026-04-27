@@ -1,112 +1,117 @@
+const HALF_DEG = Math.PI / 360;
+
 export class Quaternion {
-	constructor (x = 0, y = 0, z = 0, w = 1) {
+	constructor(x = 0, y = 0, z = 0, w = 1) {
 		this.x = x;
 		this.y = y;
 		this.z = z;
 		this.w = w;
 	}
 
-	copy ({x = 0, y = 0, z = 0, w = 1}) {
-		this.x = x;
-		this.y = y;
-		this.z = z;
-		this.w = w;
+	// ── Factories ───────────────────────────────────────────────────────────
+	static identity()              { return new Quaternion(); }
+	static from(q)                 { return new Quaternion(q.x, q.y, q.z, q.w); }
+	static fromEuler(x, y, z)      { return new Quaternion().setEuler(x, y, z); }
+	static fromAxisAngle(axis, ang){ return new Quaternion().setAxisAngle(axis, ang); }
 
+	// ── Copy / clone ────────────────────────────────────────────────────────
+	set(x = 0, y = 0, z = 0, w = 1) { this.x=x; this.y=y; this.z=z; this.w=w; return this; }
+	copy(q)  { this.x=q.x; this.y=q.y; this.z=q.z; this.w=q.w; return this; }
+	clone()  { return new Quaternion(this.x, this.y, this.z, this.w); }
+
+	// ── Set from Euler angles (YXZ — yaw/pitch/roll, standard FPS) ──────────
+	setEuler(pitch = 0, yaw = 0, roll = 0) {
+		const cp = Math.cos(pitch * 0.5), sp = Math.sin(pitch * 0.5);
+		const cy = Math.cos(yaw   * 0.5), sy = Math.sin(yaw   * 0.5);
+		const cr = Math.cos(roll  * 0.5), sr = Math.sin(roll  * 0.5);
+		this.x = sp*cy*cr + cp*sy*sr;
+		this.y = cp*sy*cr - sp*cy*sr;
+		this.z = cp*cy*sr - sp*sy*cr;
+		this.w = cp*cy*cr + sp*sy*sr;
 		return this;
 	}
 
-	clone () {
-		return new Quaternion(this.x, this.y, this.z, this.w);
-	}
+	fromEuler(x, y, z) { return this.setEuler(x, y, z); }
 
-	set (x = 0, y = 0, z = 0, w = 1) {
-		this.x = x;
-		this.y = y;
-		this.z = z;
-		this.w = w;
-
-		return this;
-	}
-
-	setEuler (x = 0, y = 0, z = 0) {
-		// YXZ order (Yaw, Pitch, Roll) - standard for FPS cameras
-		const c1 = Math.cos( x / 2 );
-		const c2 = Math.cos( y / 2 );
-		const c3 = Math.cos( z / 2 );
-
-		const s1 = Math.sin( x / 2 );
-		const s2 = Math.sin( y / 2 );
-		const s3 = Math.sin( z / 2 );
-
-		this.x = s1 * c2 * c3 + c1 * s2 * s3;
-		this.y = c1 * s2 * c3 - s1 * c2 * s3;
-		this.z = c1 * c2 * s3 - s1 * s2 * c3;
-		this.w = c1 * c2 * c3 + s1 * s2 * s3;
-
-		return this;
-	}
-
-	fromEuler (x, y, z) {
-		return this.setEuler(x, y, z);
-	}
-
-	setAxis ({x = 0, y = 0, z = 0}, angle = 0) {
-		// assumes unit vector for axis
+	// ── Set from axis + angle (axis must be unit length) ────────────────────
+	setAxisAngle(axis, angle) {
 		const half = angle * 0.5;
 		const s = Math.sin(half);
-		const c = Math.cos(half);
-
-		this.x = x * s;
-		this.y = y * s;
-		this.z = z * s;
-		this.w = c;
-	}
-
-	inverse () {
-		return this.conjugate().normalize();
-	}
-
-	conjugate () {
-		this.x *= -1;
-		this.y *= -1;
-		this.z *= -1;
-
+		this.x = axis.x * s;
+		this.y = axis.y * s;
+		this.z = axis.z * s;
+		this.w = Math.cos(half);
 		return this;
 	}
 
-	normalise () {
+	setAxis(axis, angle) { return this.setAxisAngle(axis, angle); }
+
+	// ── Derived from degrees ─────────────────────────────────────────────────
+	setEulerDeg(pitch, yaw, roll) {
+		return this.setEuler(pitch * HALF_DEG * 2, yaw * HALF_DEG * 2, roll * HALF_DEG * 2);
+	}
+
+	// ── Magnitude ───────────────────────────────────────────────────────────
+	lengthSq() { return this.x**2 + this.y**2 + this.z**2 + this.w**2; }
+	length()   { return Math.sqrt(this.lengthSq()); }
+
+	normalise() {
 		const l = this.length();
+		if (l === 0) { this.x=0; this.y=0; this.z=0; this.w=1; }
+		else { const s = 1/l; this.x*=s; this.y*=s; this.z*=s; this.w*=s; }
+		return this;
+	}
+	normalize() { return this.normalise(); }
 
-		if (l === 0) {
-			this.x = this.y = this.z = 0;
-			this.w = 1;
+	// ── Conjugate / inverse ─────────────────────────────────────────────────
+	conjugate() { this.x=-this.x; this.y=-this.y; this.z=-this.z; return this; }
+	invert()    { return this.conjugate().normalise(); }
+	inverse()   { return this.invert(); }
+
+	// ── Hamilton product (this = this × q) ──────────────────────────────────
+	multiply(q) {
+		const { x: ax, y: ay, z: az, w: aw } = this;
+		const { x: bx, y: by, z: bz, w: bw } = q;
+		this.x = aw*bx + ax*bw + ay*bz - az*by;
+		this.y = aw*by - ax*bz + ay*bw + az*bx;
+		this.z = aw*bz + ax*by - ay*bx + az*bw;
+		this.w = aw*bw - ax*bx - ay*by - az*bz;
+		return this;
+	}
+
+	// ── premultiply (q × this) ───────────────────────────────────────────────
+	premultiply(q) { return Quaternion.from(q).multiply(this).copy(this); }
+
+	// ── Dot product ─────────────────────────────────────────────────────────
+	dot(q) { return this.x*q.x + this.y*q.y + this.z*q.z + this.w*q.w; }
+
+	// ── Spherical linear interpolation ──────────────────────────────────────
+	slerp(q, t) {
+		let cosom = this.dot(q);
+		if (cosom < 0) { cosom = -cosom; q = Quaternion.from(q).conjugate(); }
+		let scale0, scale1;
+		if (1 - cosom > 1e-6) {
+			const omega = Math.acos(cosom);
+			const sinom = 1 / Math.sin(omega);
+			scale0 = Math.sin((1-t)*omega) * sinom;
+			scale1 = Math.sin(t*omega) * sinom;
 		} else {
-			const s = 1 / l;
-
-			this.x *= s;
-			this.y *= s;
-			this.z *= s;
-			this.w *= s;
+			scale0 = 1 - t;
+			scale1 = t;
 		}
-
+		this.x = scale0*this.x + scale1*q.x;
+		this.y = scale0*this.y + scale1*q.y;
+		this.z = scale0*this.z + scale1*q.z;
+		this.w = scale0*this.w + scale1*q.w;
 		return this;
 	}
 
-	length () {
-		return Math.sqrt(this.x ** 2 + this.y ** 2 + this.z ** 2 + this.w **2);
-	}
-
-	lengthSq () {
-		return this.x ** 2 + this.y ** 2 + this.z ** 2 + this.w **2;
-	}
-
-	multiply (quat) {
-
-		this.x = this.x * quat.w + this.w * quat.x + this.y * quat.z - this.z * quat.y;
-		this.y = this.y * quat.w + this.w * quat.y + this.z * quat.x - this.x * quat.z;
-		this.z = this.z * quat.w + this.w * quat.z + this.x * quat.y - this.y * quat.x;
-		this.w = this.w * quat.w - this.x * quat.x - this.y * quat.y - this.z * quat.z;
-
-		return this;
+	// ── Convert back to Euler (YXZ) ──────────────────────────────────────────
+	toEuler(out = { x: 0, y: 0, z: 0 }) {
+		const { x, y, z, w } = this;
+		out.x = Math.asin( Math.max(-1, Math.min(1, 2*(w*x - y*z))));
+		out.y = Math.atan2(2*(w*y + x*z), 1 - 2*(x*x + y*y));
+		out.z = Math.atan2(2*(w*z + x*y), 1 - 2*(x*x + z*z));
+		return out;
 	}
 }
