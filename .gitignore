@@ -1,0 +1,26 @@
+
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Gemini / Model Info
+.gemini/
+.antigravity/
+.brain/
+artifacts/
+scratch/
+
+# IDE / System
+.vscode/
+.idea/
+.DS_Store
+*.log
+Thumbs.db
+
+# Build
+.vite/
+.next/
+out/
+build/

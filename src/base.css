@@ -1,0 +1,33 @@
+html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: 'Inter', sans-serif; user-select: none;
+}
+
+#game-canvas { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+
+#ui-root { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#ui-root * { pointer-events: auto; }
+
+#loading-screen {
+    position: fixed; inset: 0; background: #0f172a;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; z-index: 100; transition: opacity 0.5s;
+}
+#loading-screen h1 {
+    font-size: 4rem; font-weight: 800; letter-spacing: -2px;
+    background: linear-gradient(to right, #38bdf8, #818cf8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 24px;
+}
+#loading-bar-wrap {
+    width: 400px; height: 6px; background: rgba(255,255,255,0.1);
+    border-radius: 999px; overflow: hidden;
+}
+#loading-bar {
+    height: 100%; width: 0%; background: #38bdf8;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); transition: width 0.2s;
+}
+#loading-text {
+    margin-top: 16px; font-size: 0.875rem; color: #94a3b8;
+    font-weight: 500; text-transform: uppercase; letter-spacing: 1px;
+}
