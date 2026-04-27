@@ -81,6 +81,7 @@ const STONE_BLOBS = [
 // ── WorldGen ───────────────────────────────────────────────────────────────
 export class WorldGen {
   constructor(seed) {
+    this._seed = seed;
     const rng = (n) => mulberry32(seed + n);
     this._heightNoise = createNoise2D(rng(0));
     this._biomeTemp   = createNoise2D(rng(1));
@@ -342,14 +343,72 @@ export class WorldGen {
           const oasisN = this._detailNoise(wx * 0.05, wz * 0.05);
           const isOasis = biomeKey === 'desert' && oasisN > 0.88;
           const treeRate = isOasis ? 12 : biome.treeR;
-          
+
           if (this._isLocalMax(wx, wz, treeRate, tv)) {
             const treeY = fillH;
             if (treeY >= oy && treeY < oy + H) {
-              const treeCfg = isOasis 
-                ? {log:'jungle_log', leaves:'jungle_leaves', h:6, jungle:true} 
+              const treeCfg = isOasis
+                ? {log:'jungle_log', leaves:'jungle_leaves', h:6, jungle:true}
                 : biome.tree;
               this._placeTree(chunk, lx, treeY - oy, lz, getId, treeCfg, engine, wx, wz);
+            }
+          }
+        }
+
+        // ── Fallen trees ──
+        if (biome.tree && !isRiver && sy >= 0 && sy < H) {
+          const fv = this._treeFBM(wx * 3.7, wz * 2.3);
+          if (this._isLocalMax(wx, wz, 28, fv)) {
+            const logId = getId(biome.tree.log);
+            const logLen = 3 + (Math.abs(wx * 13 + wz * 7) % 4);
+            // Pick a horizontal direction from the hash
+            const dir = Math.abs(wx * 17 + wz * 31) % 4;
+            const ddx = dir === 0 ? 1 : dir === 1 ? -1 : 0;
+            const ddz = dir === 2 ? 1 : dir === 3 ? -1 : 0;
+            for (let s = 0; s < logLen; s++) {
+              const flx = lx + ddx * s, flz = lz + ddz * s;
+              if (flx >= 0 && flx < W && flz >= 0 && flz < W && sy + 1 < H) {
+                if (chunk.getLocal(flx, sy + 1, flz) === 0)
+                  chunk.setLocal(flx, sy + 1, flz, logId);
+              }
+            }
+          }
+        }
+
+        // ── Surface boulders/rocks ──
+        if (!isRiver && sy >= 0 && sy < H && biomeKey !== 'ocean' && biomeKey !== 'warm_ocean' && biomeKey !== 'frozen_ocean' && biomeKey !== 'desert') {
+          const bv = this._detailNoise(wx * 0.07 + 500, wz * 0.07 + 500);
+          if (this._isLocalMax(wx, wz, 22, bv)) {
+            const boulderR = 1 + (Math.abs(wx * 11 + wz * 23) % 2);
+            const STONE = getId('stone');
+            const MOSS  = getId('mossy_cobblestone');
+            for (let dx = -boulderR; dx <= boulderR; dx++) {
+              for (let dz = -boulderR; dz <= boulderR; dz++) {
+                for (let dy = 0; dy <= boulderR; dy++) {
+                  if (dx*dx + dy*dy + dz*dz > boulderR * boulderR + 1) continue;
+                  const blx = lx + dx, bly = sy + dy + 1, blz = lz + dz;
+                  if (blx >= 0 && blx < W && bly >= 0 && bly < H && blz >= 0 && blz < W) {
+                    const useMoss = (Math.abs((wx+dx)*7 + (wz+dz)*13 + dy*31) % 5 === 0);
+                    if (chunk.getLocal(blx, bly, blz) === 0)
+                      chunk.setLocal(blx, bly, blz, useMoss ? MOSS : STONE);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // ── Village sign posts ──
+        // Place a small sign post on the road leading into a village, ~50-90 blocks out.
+        if (!isRiver && sy >= 0 && sy < H && biome.tree) {
+          const nearestVillage = this._villages._nearbyCenters(ox, oz);
+          for (const [vcx, vcz] of nearestVillage) {
+            const distSq = (wx - vcx) * (wx - vcx) + (wz - vcz) * (wz - vcz);
+            if (distSq >= 50*50 && distSq <= 90*90) {
+              // Only one sign per ~32-block stretch along village approach
+              if (this._isLocalMax(wx, wz, 32, this._treeFBM(wx * 0.5, wz * 0.5))) {
+                this._placeSignPost(chunk, lx, sy, lz, getId);
+              }
             }
           }
         }
@@ -374,6 +433,7 @@ export class WorldGen {
     const getH = (x, z) => this._getHeight(x, z);
     this._villages.fill(chunk, ox, oy, oz, getId, getH);
     this._mineshafts.fill(chunk, ox, oy, oz, getId, getH);
+    this._fillDungeons(chunk, ox, oy, oz, getId);
 
     // Re-render any neighboring chunks that received cross-chunk leaves this pass
     if (engine?._leafDirtyChunks?.size) {
@@ -572,6 +632,107 @@ export class WorldGen {
               if (Math.abs(dx) + Math.abs(dz) + Math.abs(dy) <= r + 1) leaf(lx+dx, top+dy, lz+dz);
       }
     }
+  }
+
+  // ── Cave dungeons ─────────────────────────────────────────────────────────
+  _fillDungeons(chunk, ox, oy, oz, getId) {
+    const DUNGEON_GRID   = 80;
+    const DUNGEON_CHANCE = 0.55;
+    const DUNGEON_Y_MIN  = 12;
+    const DUNGEON_Y_MAX  = 40;
+
+    const SB  = getId('stone_bricks');
+    const MSB = getId('mossy_stone_bricks');
+    const CSB = getId('chiseled_stone_bricks');
+    const MS  = getId('mossy_cobblestone');
+    const CH  = getId('chest');
+    const SP  = getId('spawner');
+    const TR  = getId('torch');
+
+    const margin = 12;
+    const minGx = Math.floor((ox - margin) / DUNGEON_GRID);
+    const maxGx = Math.ceil( (ox + 32 + margin) / DUNGEON_GRID);
+    const minGz = Math.floor((oz - margin) / DUNGEON_GRID);
+    const maxGz = Math.ceil( (oz + 32 + margin) / DUNGEON_GRID);
+
+    for (let gx = minGx; gx <= maxGx; gx++) {
+      for (let gz = minGz; gz <= maxGz; gz++) {
+        const h1 = this._dungeonHash(gx * 9 + 2, gz * 17 + 7);
+        if (h1 >= DUNGEON_CHANCE) continue;
+
+        const cx = gx * DUNGEON_GRID + Math.floor(this._dungeonHash(gx, gz * 3 + 1) * (DUNGEON_GRID - 20) + 10);
+        const cz = gz * DUNGEON_GRID + Math.floor(this._dungeonHash(gx * 3 + 1, gz) * (DUNGEON_GRID - 20) + 10);
+        const cy = DUNGEON_Y_MIN + Math.floor(this._dungeonHash(gx * 5, gz * 11) * (DUNGEON_Y_MAX - DUNGEON_Y_MIN));
+
+        // Verify this position is inside a cave
+        if (!this._isCave(cx, cy, cz, this._getHeight(cx, cz))) continue;
+
+        // 7×4×7 room (walls + ceiling + floor)
+        for (let dx = -3; dx <= 3; dx++) {
+          for (let dy = 0; dy <= 4; dy++) {
+            for (let dz = -3; dz <= 3; dz++) {
+              const wx = cx + dx, wy = cy + dy, wz = cz + dz;
+              const lx2 = wx - ox, ly2 = wy - oy, lz2 = wz - oz;
+              if (lx2 < 0 || lx2 >= 32 || ly2 < 0 || ly2 >= 32 || lz2 < 0 || lz2 >= 32) continue;
+
+              const isWall   = Math.abs(dx) === 3 || Math.abs(dz) === 3;
+              const isFloor  = dy === 0;
+              const isCeil   = dy === 4;
+              const isCorner = Math.abs(dx) === 3 && Math.abs(dz) === 3;
+
+              if (isFloor || isCeil) {
+                const pick = isCorner ? CSB : (this._dungeonHash(wx * 3, wz * 7) > 0.6 ? MSB : SB);
+                chunk.setLocal(lx2, ly2, lz2, pick);
+              } else if (isWall) {
+                const pick = this._dungeonHash(wx * 5 + dy * 3, wz * 11) > 0.55 ? MSB : (this._dungeonHash(wx * 7, wz * 13 + dy) > 0.7 ? MS : SB);
+                chunk.setLocal(lx2, ly2, lz2, pick);
+              } else {
+                // Carve interior air
+                chunk.setLocal(lx2, ly2, lz2, 0);
+              }
+            }
+          }
+        }
+
+        // Spawner at center
+        { const lx2 = cx - ox, ly2 = cy + 1 - oy, lz2 = cz - oz;
+          if (lx2 >= 0 && lx2 < 32 && ly2 >= 0 && ly2 < 32 && lz2 >= 0 && lz2 < 32)
+            chunk.setLocal(lx2, ly2, lz2, SP); }
+
+        // Two chests on opposite walls
+        for (const [ddx, ddz] of [[2, 0], [-2, 0]]) {
+          const lx2 = cx + ddx - ox, ly2 = cy + 1 - oy, lz2 = cz + ddz - oz;
+          if (lx2 >= 0 && lx2 < 32 && ly2 >= 0 && ly2 < 32 && lz2 >= 0 && lz2 < 32)
+            chunk.setLocal(lx2, ly2, lz2, CH);
+        }
+
+        // Torches on walls
+        for (const [ddx, ddz] of [[3, 0], [-3, 0], [0, 3], [0, -3]]) {
+          const lx2 = cx + ddx - ox, ly2 = cy + 2 - oy, lz2 = cz + ddz - oz;
+          if (lx2 >= 0 && lx2 < 32 && ly2 >= 0 && ly2 < 32 && lz2 >= 0 && lz2 < 32)
+            chunk.setLocal(lx2, ly2, lz2, TR);
+        }
+      }
+    }
+  }
+
+  _dungeonHash(a, b) {
+    let x = Math.imul(((a ^ b) >>> 0) + this._seed, 0x9e3779b9) ^ (a >>> 0);
+    x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+    x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+    x ^= x >>> 16;
+    return ((x >>> 0) & 0xffff) / 0xffff;
+  }
+
+  // ── Village sign posts ─────────────────────────────────────────────────────
+  // Placed in the WorldGen pass — small oak-post signs near village edges
+  // pointing explorers toward the nearest village center.
+  _placeSignPost(chunk, lx, sy, lz, getId) {
+    if (sy + 2 >= this._H) return;
+    // Don't stomp on trees or other tall structures (check 3 blocks up)
+    if (chunk.getLocal(lx, sy + 3 < this._H ? sy + 3 : sy + 2, lz) !== 0) return;
+    chunk.setLocal(lx, sy + 1, lz, getId('oak_log'));
+    chunk.setLocal(lx, sy + 2, lz, getId('oak_planks'));
   }
 
   _fbm2(fn, x, z, octaves) {
