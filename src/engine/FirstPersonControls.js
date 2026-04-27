@@ -164,6 +164,7 @@ export class FirstPersonControls {
 
 		// Flight vs Gravity
 		const isSpectator = this.gameMode === 'spectator';
+		const wasOnGround = this.onGround;
 		if ((this.gameMode === 'creative' || isSpectator) && this.isFlying) {
 			const up = (ks.Space ? 1 : 0) - (ks.ShiftLeft ? 1 : 0);
 			this.velocity.y += up * 0.1 * t;
@@ -171,12 +172,14 @@ export class FirstPersonControls {
 		} else {
 			this.velocity.y += isSpectator ? 0 : GRAVITY * t;
 			const blockUnder = this.game.chunkManager.getBlockAt(start.x, start.y - EYE_HEIGHT - 0.1, start.z);
-			const wasOnGround = this.onGround;
 			this.onGround = !!(blockUnder?.solid);
 
 			if (this.onGround && !isSpectator) {
 				if (!wasOnGround && this.velocity.y < -0.3) this.velocity.y = 0;
-				if (ks.Space) this.velocity.y = JUMP_FORCE;
+				if (ks.Space && this.velocity.y <= 0) {
+					this.velocity.y = JUMP_FORCE;
+					this.game.sound?.play('jump');
+				}
 			}
 		}
 
@@ -190,11 +193,17 @@ export class FirstPersonControls {
 		// Collision — bypass if spectator
 		if (this.gameMode !== 'spectator') {
 			// Vertical collision — feet
+			const fallVel = this.velocity.y;
 			const bFeet = this.game.chunkManager.getBlockAt(next.x, next.y - EYE_HEIGHT, next.z);
 			if (bFeet?.solid) {
 				next.y = Math.floor(next.y - EYE_HEIGHT) + EYE_HEIGHT + 1.0;
 				this.velocity.y = 0;
 				this.onGround = true;
+				// Fall damage — threshold ~3 blocks drop
+				if (!wasOnGround && fallVel < -0.45 && this.gameMode === 'survival') {
+					const dmg = Math.max(1, Math.floor((-fallVel - 0.45) * 20));
+					this.game.survival?.takeDamage(dmg);
+				}
 			}
 		}
 		// Vertical collision — head
@@ -556,12 +565,22 @@ export class FirstPersonControls {
 		// Chat input takes priority
 		if (this.chatOpen && e.code !== 'Escape') return;
 
+		// Double-tap Space → toggle flight in creative
+		if (e.code === 'Space' && this.gameMode === 'creative' && !this.game.paused && !this.inventoryOpen) {
+			const now = performance.now();
+			if (now - this.lastSpaceTime < 300) {
+				this.isFlying = !this.isFlying;
+				if (!this.isFlying) this.velocity.y = 0;
+			}
+			this.lastSpaceTime = now;
+		}
+
 		if (e.code.startsWith('Digit')) {
 			const slot = parseInt(e.code.slice(5)) - 1;
-			if (slot >= 0 && slot < 9) { 
-				this.selectedSlot = slot; 
+			if (slot >= 0 && slot < 9) {
+				this.selectedSlot = slot;
 				this._updateViewmodel();
-				return; 
+				return;
 			}
 		}
 
@@ -580,7 +599,7 @@ export class FirstPersonControls {
 				if (!this.game.paused && !this.inventoryOpen) this.game.emit('openChat');
 				break;
 			case 'F3':
-				this.game.emit('toggleCoords');
+				this.game.emit('toggleF3');
 				break;
 			case 'Escape':
 				if (this.inventoryOpen) { this.game.toggleInventory(); break; }

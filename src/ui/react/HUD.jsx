@@ -1,15 +1,30 @@
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const HUD = ({ engine, state }) => {
-    const { health, hunger, fps, hotbar, selectedSlot, position, gameMode, showCoords, showFPS } = state;
+    const { health, hunger, fps, hotbar, selectedSlot, position, showFPS, showF3, damageFlash } = state;
 
     return (
         <div className="hud-root font-sans selection:bg-sky-500/30">
+            {/* ── Damage flash vignette ── */}
+            <AnimatePresence>
+                {damageFlash && (
+                    <motion.div
+                        key="dmg-flash"
+                        initial={{ opacity: 0.65 }}
+                        animate={{ opacity: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="absolute inset-0 pointer-events-none z-50"
+                        style={{ background: 'radial-gradient(ellipse at center, transparent 25%, rgba(180,0,0,0.55) 100%)' }}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* ── Top-left: FPS + Clock ── */}
             <div className="absolute top-6 left-6 flex flex-col gap-3 pointer-events-none">
                 <div className="flex items-center gap-2">
                     {showFPS !== false && (
-                        <motion.div 
+                        <motion.div
                             initial={{ x: -20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
                             className="bg-black/40 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-2xl"
@@ -18,7 +33,7 @@ export const HUD = ({ engine, state }) => {
                             <span className="text-xs font-black text-white/90 tracking-tight">{fps} <span className="text-[10px] text-white/40 uppercase ml-0.5">FPS</span></span>
                         </motion.div>
                     )}
-                    <motion.div 
+                    <motion.div
                         initial={{ x: -20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: 0.1 }}
@@ -28,7 +43,7 @@ export const HUD = ({ engine, state }) => {
                         <span className="text-xs font-black text-white">{engine.dayNight.getTimeString()}</span>
                     </motion.div>
                 </div>
-                {state.showF3 && <F3Panel state={state} />}
+                {showF3 && <F3Panel state={state} />}
             </div>
 
             {/* ── Top-right: Minimap + XYZ ── */}
@@ -40,8 +55,8 @@ export const HUD = ({ engine, state }) => {
                 >
                     <Minimap engine={engine} position={position} />
                 </motion.div>
-                
-                {(showCoords || true) && position && (
+
+                {position && (
                     <motion.div 
                         initial={{ y: -10, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
@@ -120,13 +135,13 @@ export const HUD = ({ engine, state }) => {
                         {/* XP Bar */}
                         <div className="flex flex-col items-center gap-1 mb-1">
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-emerald-400">12</span>
+                                <span className="text-[10px] font-black text-emerald-400">{state.xpLevel ?? 0}</span>
                             </div>
                             <div className="w-48 h-2 bg-black/40 rounded-full border border-white/5 p-0.5 shadow-inner">
-                                <motion.div 
+                                <motion.div
                                     className="h-full bg-gradient-to-r from-emerald-500 via-lime-400 to-emerald-500 rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]"
                                     initial={{ width: 0 }}
-                                    animate={{ width: '65%' }}
+                                    animate={{ width: `${((state.xp ?? 0) * 100).toFixed(1)}%` }}
                                 />
                             </div>
                         </div>
@@ -215,16 +230,16 @@ const HotbarSlot = ({ item, selected, slotNum }) => (
 
 // ── Premium SVG Icons ──
 
-const HeartIcon = ({ full, half, empty }) => (
+const HeartIcon = ({ full, empty }) => (
     <div className="relative w-4 h-4">
         <svg viewBox="0 0 24 24" fill="none" className="w-full h-full drop-shadow-sm">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
-                fill={empty ? 'rgba(255,255,255,0.05)' : '#f43f5e'} 
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                fill={empty ? 'rgba(255,255,255,0.05)' : '#f43f5e'}
                 stroke={empty ? 'rgba(255,255,255,0.1)' : 'transparent'}
                 strokeWidth="1.5"
             />
             {!empty && !full && (
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
                     fill="#be123c"
                     clipPath="inset(0 0 0 50%)"
                 />
@@ -233,7 +248,7 @@ const HeartIcon = ({ full, half, empty }) => (
     </div>
 );
 
-const HungerIcon = ({ full, half, empty }) => (
+const HungerIcon = ({ full, empty }) => (
     <div className="relative w-4 h-4">
         <svg viewBox="0 0 24 24" fill="none" className="w-full h-full drop-shadow-sm">
             <path d="M18,18.5C18,19.33 17.33,20 16.5,20H7.5C6.67,20 6,19.33 6,18.5V11.5L8,7.5H16L18,11.5V18.5Z" 
@@ -260,7 +275,7 @@ const F3Panel = ({ state }) => {
     const cz = Math.floor(position.z / 16);
     return (
         <div className="mc-f3">
-            <div className="text-yellow-300 font-bold">VoxelForge 1.4 / ArloCraft</div>
+            <div className="text-yellow-300 font-bold">VoxelForge v0.1</div>
             <div>FPS: <span className="text-white">{fps}</span></div>
             <div>XYZ: <span className="text-white">{position.x.toFixed(2)} / {position.y.toFixed(2)} / {position.z.toFixed(2)}</span></div>
             <div>Chunk: <span className="text-sky-300">{cx} {cz}</span></div>
@@ -273,7 +288,7 @@ const F3Panel = ({ state }) => {
 };
 
 // ── Minimap ──
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 const Minimap = ({ engine, position }) => {
     const canvasRef = useRef(null);

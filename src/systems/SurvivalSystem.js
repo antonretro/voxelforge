@@ -19,6 +19,7 @@ export class SurvivalSystem {
         if (this.isDead || this._peaceful) return;
         this.health = Math.max(0, this.health - amount);
         this._lastDamageAt = performance.now();
+        this.engine.emit('playerDamage', amount);
         if (this.health <= 0) this._die();
     }
 

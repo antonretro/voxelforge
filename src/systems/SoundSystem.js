@@ -20,13 +20,18 @@ export class SoundSystem {
         this._syncVolume();
 
         switch (name) {
-            case 'step':    return this._playStep(ctx);
-            case 'dig':     return this._playDig(ctx);
-            case 'break':   return this._playBreak(ctx);
-            case 'place':   return this._playPlace(ctx);
-            case 'jump':    return this._playJump(ctx);
-            case 'hurt':    return this._playHurt(ctx);
-            case 'ui_click':return this._playClick(ctx);
+            case 'step':       return this._playStep(ctx);
+            case 'dig':        return this._playDig(ctx);
+            case 'break':      return this._playBreak(ctx);
+            case 'place':      return this._playPlace(ctx);
+            case 'jump':       return this._playJump(ctx);
+            case 'hurt':       return this._playHurt(ctx);
+            case 'ui_click':   return this._playClick(ctx);
+            case 'pickup':     return this._playPickup(ctx);
+            case 'splash':     return this._playSplash(ctx);
+            case 'strip':      return this._playStrip(ctx);
+            case 'hoe':        return this._playHoe(ctx);
+            case 'break_tool': return this._playBreakTool(ctx);
         }
     }
 
@@ -130,5 +135,32 @@ export class SoundSystem {
 
     _playClick(ctx) {
         this._osc(ctx, 'sine', 800, 0.05, 0.06, 600);
+    }
+
+    _playPickup(ctx) {
+        this._osc(ctx, 'sine', 880, 0.06, 0.07, 1100);
+        this._osc(ctx, 'sine', 1200, 0.03, 0.04, 1500);
+    }
+
+    _playSplash(ctx) {
+        this._noise(ctx, 0.28, 0.22);
+        this._osc(ctx, 'sine', 90, 0.28, 0.1, 45);
+        this._osc(ctx, 'sine', 160, 0.18, 0.12, 60);
+    }
+
+    _playStrip(ctx) {
+        this._noise(ctx, 0.14, 0.18);
+        this._osc(ctx, 'triangle', 180, 0.12, 0.1, 60);
+    }
+
+    _playHoe(ctx) {
+        this._noise(ctx, 0.09, 0.09);
+        this._osc(ctx, 'sawtooth', 140, 0.07, 0.05, 90);
+    }
+
+    _playBreakTool(ctx) {
+        this._noise(ctx, 0.12, 0.18);
+        this._osc(ctx, 'square', 450, 0.14, 0.1, 50);
+        this._osc(ctx, 'sine', 700, 0.08, 0.06, 80);
     }
 }

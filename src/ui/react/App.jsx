@@ -19,7 +19,8 @@ export const App = ({ engine }) => {
     const [gameState,    setGameState]    = useState('menu');
     const [showInventory,setShowInventory]= useState(false);
     const [chatOpen,     setChatOpen]     = useState(false);
-    const [showCoords,   setShowCoords]   = useState(false);
+    const [showF3,       setShowF3]       = useState(false);
+    const [damageFlash,  setDamageFlash]  = useState(false);
     const [isMobile]                      = useState(isTouchDevice);
     const [showUpdateLog, setShowUpdateLog] = useState(false);
     const [showCommunity, setShowCommunity] = useState(false);
@@ -66,7 +67,11 @@ export const App = ({ engine }) => {
         const onPlayerDeath     = ()         => setGameState('dead');
         const onOpenChat        = ()         => { setChatOpen(true);  if (engine.controls) engine.controls.chatOpen = true;  };
         const onCloseChat       = ()         => { setChatOpen(false); if (engine.controls) engine.controls.chatOpen = false; };
-        const onToggleCoords    = ()         => setShowCoords(v => !v);
+        const onToggleF3        = ()         => setShowF3(v => !v);
+        const onPlayerDamage    = ()         => {
+            setDamageFlash(true);
+            setTimeout(() => setDamageFlash(false), 500);
+        };
 
         engine.on('tick',             onTick);
         engine.on('stateChange',      onStateChange);
@@ -74,7 +79,8 @@ export const App = ({ engine }) => {
         engine.on('playerDeath',      onPlayerDeath);
         engine.on('openChat',         onOpenChat);
         engine.on('closeChat',        onCloseChat);
-        engine.on('toggleCoords',     onToggleCoords);
+        engine.on('toggleF3',         onToggleF3);
+        engine.on('playerDamage',     onPlayerDamage);
 
         return () => {
             engine.off('tick',            onTick);
@@ -83,7 +89,8 @@ export const App = ({ engine }) => {
             engine.off('playerDeath',     onPlayerDeath);
             engine.off('openChat',        onOpenChat);
             engine.off('closeChat',       onCloseChat);
-            engine.off('toggleCoords',    onToggleCoords);
+            engine.off('toggleF3',        onToggleF3);
+            engine.off('playerDamage',    onPlayerDamage);
         };
     }, [engine]);
 
@@ -138,8 +145,9 @@ export const App = ({ engine }) => {
                             engine={engine}
                             state={{
                                 ...hudState,
-                                showFPS:    engine?.settings?.get('showFPS')    ?? true,
-                                showCoords: showCoords || engine?.settings?.get('showCoords'),
+                                showFPS:     engine?.settings?.get('showFPS') ?? true,
+                                showF3,
+                                damageFlash,
                             }}
                         />
 

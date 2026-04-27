@@ -381,6 +381,7 @@ export class Engine extends Dispatcher {
 
   startGame(params = {}) {
     this.currentWorld = this.worldManager.createWorld(params.name || 'New World');
+    this.currentWorld._startTime = Date.now();
 
     // Apply world creation params
     if (params.gameMode)   this.settings.set('gameMode',   params.gameMode);
