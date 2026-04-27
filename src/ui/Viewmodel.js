@@ -30,7 +30,7 @@ export class Viewmodel {
     async _loadSkin() {
         const gl = this.engine.renderer.context;
         const img = new Image();
-        img.src = '/textures/entities/steve.png';
+        img.src = `${import.meta.env.BASE_URL}textures/entities/steve.png`;
         await new Promise(r => img.onload = r);
         
         this.skinTexture = gl.createTexture();
@@ -111,10 +111,10 @@ export class Viewmodel {
         }
 
         const img = new Image();
-        img.src = `/textures/items/${itemData.texture}.png`;
-        
+        img.src = `${import.meta.env.BASE_URL}textures/items/${itemData.texture}.png`;
+
         img.onerror = () => {
-            img.src = `/textures/packs/igneous/blocks/${itemData.texture}.png`;
+            img.src = `${import.meta.env.BASE_URL}textures/packs/igneous/blocks/${itemData.texture}.png`;
         };
 
         await new Promise(r => img.onload = r);

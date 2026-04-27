@@ -467,12 +467,12 @@ const SlotItem = ({ item }) => {
     useEffect(() => { triedFallback.current = false; }, [item?.id]);
     return (
         <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', width:34, height:34 }}>
-            <img src={`/textures/items/${item.texture || item.id}.png`}
+            <img src={`${import.meta.env.BASE_URL}textures/items/${item.texture || item.id}.png`}
                 style={{ width:30, height:30, objectFit:'contain', imageRendering:'pixelated' }}
                 onError={(e) => {
                     if (!triedFallback.current) {
                         triedFallback.current = true;
-                        e.target.src = `/textures/packs/igneous/blocks/${item.texture || item.id}.png`;
+                        e.target.src = `${import.meta.env.BASE_URL}textures/packs/igneous/blocks/${item.texture || item.id}.png`;
                     }
                 }}
             />

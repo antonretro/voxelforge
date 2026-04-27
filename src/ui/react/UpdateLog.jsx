@@ -110,10 +110,10 @@ export const UpdateLog = ({ onClose }) => {
                                 >
                                     <div className="w-14 h-14 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-center hover:bg-white/10 hover:scale-110 transition-all cursor-help">
                                         <img 
-                                            src={`/textures/packs/igneous/blocks/${id}.png`}
+                                            src={`${import.meta.env.BASE_URL}textures/packs/igneous/blocks/${id}.png`}
                                             className="w-8 h-8 image-pixelated drop-shadow-lg"
                                             alt={id}
-                                            onError={(e) => e.target.src = `/textures/items/${id}.png`}
+                                            onError={(e) => e.target.src = `${import.meta.env.BASE_URL}textures/items/${id}.png`}
                                         />
                                     </div>
                                     <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 border border-white/10 rounded text-[9px] text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">

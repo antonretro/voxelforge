@@ -134,7 +134,7 @@ export class BlockRegistry {
     }
 
     try {
-      const url = `/textures/packs/${this.texturePack}/blocks/${name}.png`;
+      const url = `${import.meta.env.BASE_URL}textures/packs/${this.texturePack}/blocks/${name}.png`;
       const img = await this._loadImage(url);
       ctx.drawImage(img, 0, 0, size, size);
     } catch {

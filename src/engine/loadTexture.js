@@ -73,7 +73,7 @@ async function fetchImage(name, texSize, zipOverrides) {
   if (zipOverrides?.has(name)) {
     return await createImageBitmap(zipOverrides.get(name), options);
   }
-  const url = `/textures/packs/${currentPack}/blocks/${name}.png`;
+  const url = `${import.meta.env.BASE_URL}textures/packs/${currentPack}/blocks/${name}.png`;
   try {
     const r = await fetch(url);
     if (!r.ok) throw 0;

@@ -201,15 +201,15 @@ const HotbarSlot = ({ item, selected, slotNum }) => (
         {item && (
             <div className="relative group">
                 <img
-                    src={`/textures/items/${item.id}.png`}
+                    src={`${import.meta.env.BASE_URL}textures/items/${item.id}.png`}
                     className="w-10 h-10 object-contain drop-shadow-xl"
                     style={{ imageRendering: 'pixelated' }}
                     onError={e => {
                         const t = e.target;
                         if (t.src.includes('/items/')) {
-                            t.src = `/textures/packs/igneous/blocks/${item.id}.png`;
+                            t.src = `${import.meta.env.BASE_URL}textures/packs/igneous/blocks/${item.id}.png`;
                         } else if (!t.src.includes('fallback')) {
-                            t.src = '/textures/packs/igneous/blocks/grass_block_side.png';
+                            t.src = `${import.meta.env.BASE_URL}textures/packs/igneous/blocks/grass_block_side.png`;
                         }
                     }}
                 />

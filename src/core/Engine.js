@@ -277,7 +277,7 @@ export class Engine extends Dispatcher {
 
     // Load blocks + build texture atlas
     setLoadingProgress(30, 'Loading blocks...');
-    const atlas = await Block.parseDefinitions(this.renderer.context, '/blocks.json');
+    const atlas = await Block.parseDefinitions(this.renderer.context, `${import.meta.env.BASE_URL}blocks.json`);
     this.renderer.setAtlas(atlas);
 
     setLoadingProgress(60, 'Creating world...');
@@ -494,7 +494,7 @@ export class Engine extends Dispatcher {
   async reloadTexturePack(packName, zipOverrides = null) {
     setTexturePack(packName);
     const atlas = await Block.parseDefinitions(
-      this.renderer.context, '/blocks.json', zipOverrides
+      this.renderer.context, `${import.meta.env.BASE_URL}blocks.json`, zipOverrides
     );
     this.renderer.setAtlas(atlas);
     for (const chunk of this.chunkManager.loadedChunks.values()) {
