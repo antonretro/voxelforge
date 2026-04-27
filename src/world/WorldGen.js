@@ -22,9 +22,9 @@ const BIOMES = {
   beach:           { surface:'sand',        sub:'sand',      deep:'sandstone',  tree:null, treeR:0 },
   stony_shore:     { surface:'stone',       sub:'gravel',    deep:'stone',      tree:null, treeR:0 },
   // Flat / open
-  plains:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:4}, treeR:35 },
-  sunflower_plains:{ surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:4}, treeR:40, flowers:['dandelion','dandelion','dandelion','poppy'] },
-  meadow:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:30, flowers:['poppy','dandelion','allium','cornflower','lily_of_the_valley'] },
+  plains:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:4}, treeR:10 },
+  sunflower_plains:{ surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:4}, treeR:12, flowers:['dandelion','dandelion','dandelion','poppy'] },
+  meadow:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:10, flowers:['poppy','dandelion','allium','cornflower','lily_of_the_valley'] },
   // Forest
   forest:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:8 },
   flower_forest:   { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:10,  flowers:['poppy','dandelion','allium','cornflower','lily_of_the_valley','blue_orchid'] },
@@ -33,25 +33,25 @@ const BIOMES = {
   // Taiga / cold
   taiga:           { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:7, spruce:true}, treeR:8 },
   grove:           { surface:'snow_block',  sub:'dirt',      deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:6, spruce:true}, treeR:7 },
-  snowy_plains:    { surface:'snow_block',  sub:'dirt',      deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:6, spruce:true}, treeR:25 },
+  snowy_plains:    { surface:'snow_block',  sub:'dirt',      deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:6, spruce:true}, treeR:12 },
   snowy_taiga:     { surface:'snow_block',  sub:'dirt',      deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:7, spruce:true}, treeR:10 },
-  snowy_slopes:    { surface:'snow_block',  sub:'stone',     deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:5, spruce:true}, treeR:15, frozen:true },
+  snowy_slopes:    { surface:'snow_block',  sub:'stone',     deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:5, spruce:true}, treeR:10, frozen:true },
   ice_spikes:      { surface:'packed_ice',  sub:'packed_ice',deep:'stone',      tree:null, treeR:0, iceSpikes:true, frozen:true },
   // Dry / hot
   desert:          { surface:'sand',        sub:'sand',      deep:'sandstone',  tree:null, treeR:0 },
   badlands:        { surface:'red_sand',    sub:'red_sand',  deep:'stone',      tree:null, treeR:0 },
-  wooded_badlands: { surface:'red_sand',    sub:'red_sand',  deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:15 },
+  wooded_badlands: { surface:'red_sand',    sub:'red_sand',  deep:'stone',      tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:10 },
   savanna:         { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'acacia_log',   leaves:'acacia_leaves',  h:5, acacia:true}, treeR:12 },
   // Jungle / wet
   jungle:          { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'jungle_log',   leaves:'jungle_leaves',  h:9, jungle:true}, treeR:6 },
-  sparse_jungle:   { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'jungle_log',   leaves:'jungle_leaves',  h:8, jungle:true}, treeR:15 },
+  sparse_jungle:   { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'jungle_log',   leaves:'jungle_leaves',  h:8, jungle:true}, treeR:10 },
   swamp:           { surface:'grass_block', sub:'mud',       deep:'clay',       tree:{log:'oak_log',      leaves:'oak_leaves',     h:5}, treeR:12,  flowers:['blue_orchid'] },
   mangrove_swamp:  { surface:'mud',         sub:'mud',       deep:'clay',       tree:{log:'mangrove_log', leaves:'mangrove_leaves',h:5}, treeR:10,  flowers:['blue_orchid'] },
   lush_caves:      { surface:'moss_block',  sub:'moss_block',deep:'stone',      tree:{log:'oak_log',      leaves:'azalea_leaves',  h:4}, treeR:10,  flowers:['lily_of_the_valley'] },
   // Mountain
   cherry_grove:    { surface:'grass_block', sub:'dirt',      deep:'stone',      tree:{log:'cherry_log',   leaves:'cherry_leaves',  h:5}, treeR:8 },
-  windswept_hills: { surface:'stone',       sub:'gravel',    deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:5, spruce:true}, treeR:20 },
-  mountains:       { surface:'stone',       sub:'stone',     deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:6, spruce:true}, treeR:18 },
+  windswept_hills: { surface:'stone',       sub:'gravel',    deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:5, spruce:true}, treeR:10 },
+  mountains:       { surface:'stone',       sub:'stone',     deep:'stone',      tree:{log:'spruce_log',   leaves:'spruce_leaves',  h:6, spruce:true}, treeR:10 },
 };
 
 // Biomes where rivers freeze into ice
@@ -470,11 +470,13 @@ export class WorldGen {
   // ── Tree helpers ───────────────────────────────────────────────────────────
   _treeFBM(x, z) { return this._fbm2(this._treeNoise, x * 0.012, z * 0.012, 4); }
 
-  _isLocalMax(wx, wz, R, val) {
-    for (let dx = -R; dx <= R; dx++)
-      for (let dz = -R; dz <= R; dz++)
-        if ((dx || dz) && this._treeFBM(wx + dx, wz + dz) > val) return false;
-    return true;
+  _isLocalMax(wx, wz, R, _val) {
+    // Fast: use a deterministic hash to pick one tree per R×R cell
+    const cx = Math.floor(wx / R), cz = Math.floor(wz / R);
+    const h = Math.sin(cx * 127.1 + cz * 311.7) * 43758.5453;
+    const px = cx * R + Math.floor((h - Math.floor(h)) * R);
+    const pz = cz * R + Math.floor((Math.sin(cx * 269.5 + cz * 183.3) * 43758.5453 - Math.floor(Math.sin(cx * 269.5 + cz * 183.3) * 43758.5453)) * R);
+    return wx === px && wz === pz;
   }
 
   _placeTree(chunk, lx, ly, lz, getId, cfg, engine, wx, wz) {
