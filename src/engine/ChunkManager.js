@@ -134,6 +134,13 @@ export class ChunkManager {
 			return null;
 
 		chunk.setBlockAt(x, y, z, 1);
+
+		if (y + 1 < this.chunkHeight) {
+			const above = this.getBlockAt(x, y + 1, z);
+			if (above && above.individual) {
+				this.removeBlockAt(x, y + 1, z);
+			}
+		}
 	}
 	get (key) {
 		return this.loadedChunks.get(key);
