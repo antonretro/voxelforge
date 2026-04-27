@@ -1,7 +1,6 @@
 import { CompositeDisposable } from "./events/CompositeDisposable.js";
 import { Disposable } from "./events/Disposable.js";
 import { Vector3 } from "./math/Vector3.js";
-import { raycast } from "./raycast.js";
 import { Block } from "./Block.js";
 import { Entity } from "./Entity.js";
 import { getTextureCoords } from "./loadTexture.js";
@@ -317,7 +316,6 @@ export class FirstPersonControls {
 				this.game.sound?.play('break');
 
 				// 2. Spawn the drop (Mini version)
-				const dropId = block.drop || block.name;
 				const required = DROP_REQUIRES[id] ?? 0;
 				const held = this.game.player?.hotbar[this.selectedSlot];
 				const tier = getToolTier(held?.id);
@@ -466,12 +464,14 @@ export class FirstPersonControls {
 				const { x, y, z } = hitPos;
 				let transformed = false;
 
-				// Axe -> Stripping
-				if (item.id.includes('axe') && (hitBlock.id === 4 || hitBlock.name === 'oak_log')) {
-					const strippedLog = this.game.blocks.find(b => b.name === 'stripped_oak_log');
-					if (strippedLog) {
-						this.game.chunkManager.setBlockAt(x, y, z, strippedLog);
-						this.game.network?.broadcastBlockSet(x, y, z, strippedLog.id);
+				// Axe -> Stripping (any _log or _wood block)
+				if (item.id.includes('axe') && !hitBlock.name.startsWith('stripped_') &&
+					(hitBlock.name.endsWith('_log') || hitBlock.name.endsWith('_wood'))) {
+					const strippedName = `stripped_${hitBlock.name}`;
+					const strippedBlock = this.game.blocks.find(b => b.name === strippedName);
+					if (strippedBlock) {
+						this.game.chunkManager.setBlockAt(x, y, z, strippedBlock);
+						this.game.network?.broadcastBlockSet(x, y, z, strippedBlock.id);
 						this.game.sound?.play('strip');
 						transformed = true;
 					}

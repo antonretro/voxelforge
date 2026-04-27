@@ -356,21 +356,30 @@ export class WorldGen {
       }
     }
 
-    // Flush pending cross-chunk leaves
-    if (engine.pendingLeaves) {
+    // Flush pending cross-chunk leaves into this chunk, then prune placed entries
+    if (engine?.pendingLeaves?.size) {
+      const toDelete = [];
       for (const [key, lid] of engine.pendingLeaves) {
         const [px, py, pz] = key.split(',').map(Number);
         const lx = px - ox, ly = py - oy, lz = pz - oz;
         if (lx >= 0 && lx < W && ly >= 0 && ly < H && lz >= 0 && lz < W) {
           if (chunk.getLocal(lx, ly, lz) === 0) chunk.setLocal(lx, ly, lz, lid);
+          toDelete.push(key);
         }
       }
+      for (const k of toDelete) engine.pendingLeaves.delete(k);
     }
 
     // Structures (run after terrain so they overwrite it)
     const getH = (x, z) => this._getHeight(x, z);
     this._villages.fill(chunk, ox, oy, oz, getId, getH);
     this._mineshafts.fill(chunk, ox, oy, oz, getId, getH);
+
+    // Re-render any neighboring chunks that received cross-chunk leaves this pass
+    if (engine?._leafDirtyChunks?.size) {
+      for (const nc of engine._leafDirtyChunks) nc.render();
+      engine._leafDirtyChunks.clear();
+    }
   }
 
   // ── River strength ─────────────────────────────────────────────────────────
@@ -490,11 +499,32 @@ export class WorldGen {
     const top     = ly + h;
     const pending = engine.pendingLeaves || (engine.pendingLeaves = new Map());
 
+    const W = this._W;
+    const chunkOx = chunk.ox ?? 0;
+    const chunkOy = chunk.oy ?? 0;
+    const chunkOz = chunk.oz ?? 0;
+    const cm = engine?.chunkManager;
+
     const leaf = (nx, ny, nz) => {
-      if (nx >= 0 && nx < this._W && ny >= 0 && ny < this._H && nz >= 0 && nz < this._W) {
+      if (nx >= 0 && nx < W && ny >= 0 && ny < this._H && nz >= 0 && nz < W) {
         if (chunk.getLocal(nx, ny, nz) === 0) chunk.setLocal(nx, ny, nz, LEAVES);
       } else {
-        const k = `${(chunk.ox??chunk.getPosition?.().x??0)+nx},${(chunk.oy??0)+ny},${(chunk.oz??chunk.getPosition?.().z??0)+nz}`;
+        const wx = chunkOx + nx, wy = chunkOy + ny, wz = chunkOz + nz;
+        if (cm) {
+          // If the neighbor chunk is already loaded, write directly and flag it for re-render
+          const ncx = Math.floor(wx / W), ncz = Math.floor(wz / W);
+          const nc = cm.get(`${ncx}_${ncz}`);
+          if (nc) {
+            const nlx = ((wx % W) + W) % W, nlz = ((wz % W) + W) % W;
+            if (nc.getLocal(nlx, wy, nlz) === 0) {
+              nc.setLocal(nlx, wy, nlz, LEAVES);
+              if (!engine._leafDirtyChunks) engine._leafDirtyChunks = new Set();
+              engine._leafDirtyChunks.add(nc);
+            }
+            return;
+          }
+        }
+        const k = `${wx},${wy},${wz}`;
         if (!pending.has(k)) pending.set(k, LEAVES);
       }
     };

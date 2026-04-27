@@ -283,7 +283,7 @@ export const Inventory = ({ engine, onClose }) => {
 
     // ── Slot shorthand ────────────────────────────────────────────────────────
     const S = (type, i) => ({
-        item:        getArr(type)?.[i] ?? null,
+        item:        type === 'creative' ? (filteredItems[i] ?? null) : (getArr(type)?.[i] ?? null),
         onHover:     setHovered,
         onClick:     (rc, sc) => handleClick(type, i, rc, sc),
         onDragStart: () => { dragSrc.current = { type, idx: i }; },
