@@ -203,62 +203,97 @@ const BLOCK_COLORS = [
     '#facc15', '#fbbf24', '#fde68a',
 ];
 
-function useVoxelParticles(count = 60) {
-    const ref = useRef(null);
+const VoxelBackground = () => {
+    const canvasRef = useRef(null);
 
     useEffect(() => {
-        const el = ref.current;
-        if (!el) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-        const particles = Array.from({ length: count }, () => ({
+        const resize = () => {
+            canvas.width  = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        };
+        resize();
+        window.addEventListener('resize', resize);
+
+        const W = () => canvas.width;
+        const H = () => canvas.height;
+
+        const particles = Array.from({ length: 55 }, () => ({
             x:       Math.random() * 100,
             y:       Math.random() * 110,
-            size:    12 + Math.random() * 44,
+            size:    10 + Math.random() * 36,
             color:   BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)],
-            vy:      0.012 + Math.random() * 0.028,
-            vx:      (Math.random() - 0.5) * 0.018,
-            rot:     Math.random() * 360,
-            vr:      (Math.random() - 0.5) * 0.45,
-            opacity: 0.22 + Math.random() * 0.32,
+            vy:      0.012 + Math.random() * 0.026,
+            vx:      (Math.random() - 0.5) * 0.016,
+            rot:     Math.random() * Math.PI * 2,
+            vr:      (Math.random() - 0.5) * 0.008,
+            opacity: 0.18 + Math.random() * 0.28,
         }));
 
-        let running = true;
+        // Pre-parse colors to avoid repeated string parsing in the draw loop
+        const parsed = particles.map(p => {
+            const hex = p.color.replace('#', '');
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            return { ...p, r, g, b };
+        });
+
+        const ctx = canvas.getContext('2d');
+        let raf = 0;
+
         const tick = () => {
-            if (!running) return;
-            for (const p of particles) {
+            const w = W(), h = H();
+            ctx.clearRect(0, 0, w, h);
+
+            // Background gradient
+            const grad = ctx.createRadialGradient(w * 0.6, h * 0.4, 0, w * 0.6, h * 0.4, Math.max(w, h));
+            grad.addColorStop(0,   '#0d2040');
+            grad.addColorStop(0.5, '#08101e');
+            grad.addColorStop(1,   '#020508');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            for (const p of parsed) {
                 p.y   -= p.vy;
                 p.x   += p.vx;
                 p.rot += p.vr;
                 if (p.y < -8)  { p.y = 108; p.x = Math.random() * 100; }
                 if (p.x < -5)  p.x = 105;
                 if (p.x > 105) p.x = -5;
+
+                const px = (p.x / 100) * w;
+                const py = (p.y / 100) * h;
+                const s  = p.size;
+
+                ctx.save();
+                ctx.globalAlpha = p.opacity;
+                ctx.translate(px, py);
+                ctx.rotate(p.rot);
+                ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+                ctx.beginPath();
+                ctx.roundRect(-s / 2, -s / 2, s, s, 3);
+                ctx.fill();
+                ctx.restore();
             }
-            if (el) {
-                el.innerHTML = particles.map(p => `<div style="
-                    position:absolute;left:${p.x}%;top:${p.y}%;
-                    width:${p.size}px;height:${p.size}px;
-                    background:${p.color};opacity:${p.opacity};
-                    transform:rotate(${p.rot}deg);border-radius:4px;
-                    pointer-events:none;
-                    box-shadow:0 0 ${p.size * 0.7}px ${p.color}55,inset 0 0 ${p.size * 0.25}px rgba(255,255,255,0.2);
-                "></div>`).join('');
-            }
-            requestAnimationFrame(tick);
+
+            raf = requestAnimationFrame(tick);
         };
-        requestAnimationFrame(tick);
-        return () => { running = false; };
-    }, [count]);
+        raf = requestAnimationFrame(tick);
 
-    return ref;
-}
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener('resize', resize);
+        };
+    }, []);
 
-const VoxelBackground = () => {
-    const ref = useVoxelParticles(60);
     return (
-        <div
-            ref={ref}
-            className="absolute inset-0 overflow-hidden"
-            style={{ background: 'radial-gradient(ellipse at 60% 40%, #0d2040 0%, #08101e 50%, #020508 100%)' }}
+        <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full"
+            style={{ display: 'block' }}
         />
     );
 };
