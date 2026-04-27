@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Box, Shield, Zap, Flame, Grid3x3, Hammer, Search, Leaf, Palette, Cpu, Carrot, Package, Star, Map } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { X, Search, Shield, ArrowRight } from 'lucide-react';
 import { ITEMS } from '../../data/items.js';
 import { CraftingSystem } from '../../systems/CraftingSystem.js';
 import { RECIPE_BOOK } from '../../data/recipeBook.js';
@@ -9,534 +8,479 @@ const craftingSystem = new CraftingSystem(RECIPE_BOOK);
 const MAX_STACK = 64;
 
 const CATEGORIES = [
-    { id: 'Building',   icon: Box,     label: 'Building' },
-    { id: 'Natural',    icon: Leaf,    label: 'Natural' },
-    { id: 'Redstone',   icon: Cpu,     label: 'Redstone' },
-    { id: 'Blueprint',  icon: Map,     label: 'Architecture' },
-    { id: 'Consumables',icon: Carrot,  label: 'Consumables' },
-    { id: 'Tools',      icon: Hammer,  label: 'Tools' },
-    { id: 'Misc',       icon: Palette, label: 'Miscellaneous' }
+    { id: 'all',         label: 'All' },
+    { id: 'Building',    label: 'Blocks' },
+    { id: 'Natural',     label: 'Natural' },
+    { id: 'Tools',       label: 'Tools' },
+    { id: 'Consumables', label: 'Food' },
+    { id: 'Redstone',    label: 'Redstone' },
+    { id: 'Misc',        label: 'Misc' },
 ];
+
+function canStack(a, b) {
+    return a && b && a.id === b.id && b.count < (b.stackSize || MAX_STACK);
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export const Inventory = ({ engine, onClose }) => {
     const [gameMode, setGameMode] = useState(() => engine.settings?.get('gameMode') || 'survival');
     const isCreative = gameMode === 'creative';
-    const container = engine.activeContainer || { type: 'player', title: 'Inventory', size: 27 };
-    
-    const [inventory, setInventory] = useState(() => engine.player?.inventory || Array(27).fill(null));
-    const [hotbar, setHotbar]       = useState(() => engine.player?.hotbar || Array(9).fill(null));
-    const [craftingGrid, setCraftingGrid] = useState(Array(9).fill(null)); // 3x3
-    const [activeCategory, setActiveCategory] = useState('Building');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [carryItem, setCarryItem] = useState(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-    // Sync state with engine
+    // All slot state lives here — single source of truth
+    const [inv,       setInv]       = useState(() => [...(engine.player?.inventory || Array(27).fill(null))]);
+    const [hotbar,    setHotbar]    = useState(() => [...(engine.player?.hotbar    || Array(9).fill(null))]);
+    const [craftGrid, setCraftGrid] = useState(() => Array(9).fill(null));
+    const [carry,     setCarry]     = useState(null);
+    const [mousePos,  setMousePos]  = useState({ x: 0, y: 0 });
+    const [hovered,   setHovered]   = useState(null);
+    const [category,  setCategory]  = useState('all');
+    const [search,    setSearch]    = useState('');
+
+    const container = engine.activeContainer || null;
+    const [chestInv, setChestInv] = useState(() => container?.inventory ? [...container.inventory] : Array(27).fill(null));
+
+    const dragSrc = useRef(null);
+
+    // Write React state back to engine so the game world stays in sync
+    const syncToEngine = useCallback((nextInv, nextHotbar) => {
+        if (engine.player) {
+            if (nextInv)    engine.player.inventory = nextInv;
+            if (nextHotbar) engine.player.hotbar    = nextHotbar;
+            engine.player.dirty = true;
+        }
+    }, [engine]);
+
+    // External changes (e.g. picking up item in world)
     useEffect(() => {
-        const syncInv = () => setInventory([...(engine.player?.inventory || [])]);
-        const syncHot = () => setHotbar([...(engine.player?.hotbar || [])]);
-
-        // Initial sync
-        syncInv();
-        syncHot();
-
-        engine.on('inventoryUpdate', syncInv);
-        engine.on('hotbarUpdate', syncHot);
-
-        const handleMove = (e) => setMousePos({ x: e.clientX, y: e.clientY });
-        window.addEventListener('mousemove', handleMove);
-        
+        const onInv = () => setInv([...(engine.player?.inventory || [])]);
+        const onHot = () => setHotbar([...(engine.player?.hotbar    || [])]);
+        engine.on('inventoryUpdate', onInv);
+        engine.on('hotbarUpdate',    onHot);
+        const onMove = (e) => setMousePos({ x: e.clientX, y: e.clientY });
+        window.addEventListener('mousemove', onMove);
         return () => {
-            engine.off('inventoryUpdate', syncInv);
-            engine.off('hotbarUpdate', syncHot);
-            window.removeEventListener('mousemove', handleMove);
+            engine.off('inventoryUpdate', onInv);
+            engine.off('hotbarUpdate',    onHot);
+            window.removeEventListener('mousemove', onMove);
         };
     }, [engine]);
 
-    const [hoveredItem, setHoveredItem] = useState(null);
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
 
-    const allItems = useMemo(() => {
+    // Creative item list
+    const creativeItems = useMemo(() => {
         const items = [...(ITEMS || [])];
-        const existingIds = new Set(items.map(i => i.id));
-        
-        // Add all engine blocks that aren't already items
-        (engine.blocks || []).forEach(block => {
-            if (!existingIds.has(block.name)) {
-                const rt = block.rawTextures || {};
-                items.push({
-                    id: block.name,
-                    name: block.name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-                    stackSize: 64,
-                    placeBlock: block.name,
-                    texture: rt.texture || rt.top || rt.side || 'grass_block_side',
-                    category: block.transparent ? 'Misc' : (block.id < 50 ? 'Natural' : 'Building')
-                });
-            }
+        const seen = new Set(items.map(i => i.id));
+        (engine.blocks || []).forEach(b => {
+            if (seen.has(b.name)) return;
+            const rt = b.rawTextures || {};
+            items.push({
+                id: b.name,
+                name: b.name.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' '),
+                stackSize: 64, placeBlock: b.name,
+                texture: rt.texture || rt.top || rt.side || 'grass_block_side',
+                category: b.transparent ? 'Misc' : (b.id < 50 ? 'Natural' : 'Building'),
+            });
+            seen.add(b.name);
         });
         return items;
     }, [engine.blocks]);
 
     const filteredItems = useMemo(() => {
-        if (!isCreative) return [];
-        return allItems.filter(item => {
-            const name = item.name || '';
-            const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesCategory = activeCategory === 'all' || item.category === activeCategory;
-            return matchesSearch && matchesCategory;
-        });
-    }, [isCreative, searchQuery, activeCategory, allItems]);
+        const q = search.toLowerCase();
+        return creativeItems.filter(item =>
+            (category === 'all' || item.category === category) &&
+            (!q || (item.name || '').toLowerCase().includes(q))
+        );
+    }, [creativeItems, category, search]);
 
-    const craftingResult = useMemo(() => {
-        const isBench = container.type === 'crafting_table';
-        const grid = isBench ? craftingGrid : [craftingGrid[0], craftingGrid[1], null, craftingGrid[3], craftingGrid[4], null, null, null, null];
+    const craftResult = useMemo(() => {
+        const grid = container?.type === 'crafting_table'
+            ? craftGrid
+            : [craftGrid[0], craftGrid[1], null, craftGrid[3], craftGrid[4], null, null, null, null];
         return craftingSystem.match(grid);
-    }, [craftingGrid, container.type]);
+    }, [craftGrid, container]);
 
-    const handleSlotClick = (type, idx, isRightClick = false, isShiftClick = false) => {
-        let target;
-        let updateFn;
-        
-        if (type === 'inventory') {
-            target = engine.player.inventory;
-            updateFn = () => setInventory([...engine.player.inventory]);
-        } else if (type === 'hotbar') {
-            target = engine.player.hotbar;
-            updateFn = () => setHotbar([...engine.player.hotbar]);
-        } else if (type === 'container') {
-            target = container.inventory;
-            updateFn = () => setInventory([...engine.player.inventory]);
-        } else if (type === 'crafting') {
-            target = craftingGrid;
-            updateFn = () => setCraftingGrid([...craftingGrid]);
-        } else if (type === 'creative') {
-            const item = filteredItems[idx];
-            if (!carryItem) {
-                setCarryItem({ ...item, count: item.stackSize || MAX_STACK });
-            } else {
-                setCarryItem(null);
-            }
-            return;
-        }
-        
-        const slotItem = target[idx];
+    // ── Helpers to get/set a slot array by name ──────────────────────────────
 
-        // 1. Shift-Click: Instant transfer
-        if (isShiftClick && slotItem) {
-            if (type === 'inventory') {
-                if (engine.player.addItemToHotbar(slotItem)) target[idx] = null;
-            } else if (type === 'hotbar') {
-                if (engine.player.addItemToInventory(slotItem)) target[idx] = null;
-            }
-            updateFn();
-            setInventory([...engine.player.inventory]);
-            setHotbar([...engine.player.hotbar]);
-            return;
-        }
-
-        // 2. Standard Interactions
-        if (!carryItem) {
-            if (!slotItem) return;
-            if (isRightClick && slotItem.count > 1) {
-                const take = Math.ceil(slotItem.count / 2);
-                setCarryItem({ ...slotItem, count: take });
-                slotItem.count -= take;
-            } else {
-                setCarryItem({ ...slotItem });
-                target[idx] = null;
-            }
-        } else {
-            if (isRightClick) {
-                // Place single item
-                if (!slotItem) {
-                    target[idx] = { ...carryItem, count: 1 };
-                    carryItem.count--;
-                } else if (slotItem.id === carryItem.id && slotItem.count < (slotItem.stackSize || MAX_STACK)) {
-                    slotItem.count++;
-                    carryItem.count--;
-                } else {
-                    // Swap
-                    const temp = { ...slotItem };
-                    target[idx] = { ...carryItem };
-                    setCarryItem(temp);
-                }
-                if (carryItem.count <= 0) setCarryItem(null);
-            } else {
-                // Place/Stack/Swap
-                if (!slotItem) {
-                    target[idx] = { ...carryItem };
-                    setCarryItem(null);
-                } else if (slotItem.id === carryItem.id && slotItem.count < (slotItem.stackSize || MAX_STACK)) {
-                    const space = (slotItem.stackSize || MAX_STACK) - slotItem.count;
-                    const moved = Math.min(space, carryItem.count);
-                    slotItem.count += moved;
-                    carryItem.count -= moved;
-                    if (carryItem.count <= 0) setCarryItem(null);
-                } else {
-                    const temp = { ...slotItem };
-                    target[idx] = { ...carryItem };
-                    setCarryItem(temp);
-                }
-            }
-        }
-        
-        if (updateFn) updateFn();
-        engine.player.dirty = true;
+    const getArr = (type) => {
+        if (type === 'inv')     return inv;
+        if (type === 'hotbar')  return hotbar;
+        if (type === 'chest')   return chestInv;
+        if (type === 'crafting')return craftGrid;
+        return null;
     };
 
-    const handleDragDrop = (sourceType, sourceIdx, targetType, targetIdx) => {
-        if (sourceType === targetType && sourceIdx === targetIdx) return;
-        
-        const getTarget = (t) => {
-            if (t === 'inventory') return engine.player.inventory;
-            if (t === 'hotbar') return engine.player.hotbar;
-            if (t === 'container') return container.inventory;
-            if (t === 'crafting') return craftingGrid;
-            return null;
-        };
-        
-        const getUpdateFn = (t) => {
-            if (t === 'inventory') return () => setInventory([...engine.player.inventory]);
-            if (t === 'hotbar') return () => setHotbar([...engine.player.hotbar]);
-            if (t === 'container') return () => setInventory([...engine.player.inventory]);
-            if (t === 'crafting') return () => setCraftingGrid([...craftingGrid]);
-            return () => {};
-        };
+    const setArr = useCallback((type, next) => {
+        if (type === 'inv')      { setInv(next);       syncToEngine(next, null); }
+        else if (type === 'hotbar')   { setHotbar(next);    syncToEngine(null, next); }
+        else if (type === 'chest')    { setChestInv(next);  if (container) container.inventory = next; }
+        else if (type === 'crafting') { setCraftGrid(next); }
+    }, [syncToEngine, container]);
 
-        if (sourceType === 'creative') {
-            const sItem = filteredItems[sourceIdx];
-            const tTarget = getTarget(targetType);
-            const tItem = tTarget[targetIdx];
-            if (!tItem) {
-                tTarget[targetIdx] = { ...sItem, count: sItem.stackSize || MAX_STACK };
-            } else if (tItem.id === sItem.id && tItem.count < (tItem.stackSize || MAX_STACK)) {
-                tItem.count = tItem.stackSize || MAX_STACK;
-            } else {
-                tTarget[targetIdx] = { ...sItem, count: sItem.stackSize || MAX_STACK };
-            }
-            getUpdateFn(targetType)();
-            engine.player.dirty = true;
+    // ── Click handler ────────────────────────────────────────────────────────
+
+    const handleClick = useCallback((type, idx, rightClick = false, shiftClick = false) => {
+        // Creative: pick up unlimited stack
+        if (type === 'creative') {
+            const item = filteredItems[idx];
+            if (!item) return;
+            setCarry(carry ? null : { ...item, count: item.stackSize || MAX_STACK });
             return;
         }
 
-        const sTarget = getTarget(sourceType);
-        const tTarget = getTarget(targetType);
-        if (!sTarget || !tTarget) return;
+        const arr = getArr(type);
+        if (!arr) return;
+        const next = [...arr];
+        const slot = next[idx] ? { ...next[idx] } : null;
 
-        const sItem = sTarget[sourceIdx];
-        const tItem = tTarget[targetIdx];
+        // Shift+click — auto-move between inv ↔ hotbar
+        if (shiftClick && slot) {
+            if (type === 'inv') {
+                const hNext = [...hotbar];
+                const emptyHot = hNext.findIndex(s => !s);
+                if (emptyHot !== -1) { hNext[emptyHot] = slot; next[idx] = null; setArr('inv', next); setArr('hotbar', hNext); }
+            } else if (type === 'hotbar') {
+                const iNext = [...inv];
+                const emptyInv = iNext.findIndex(s => !s);
+                if (emptyInv !== -1) { iNext[emptyInv] = slot; next[idx] = null; setArr('hotbar', next); setArr('inv', iNext); }
+            }
+            return;
+        }
 
+        // No carry — pick up
+        if (!carry) {
+            if (!slot) return;
+            if (rightClick && slot.count > 1) {
+                const take = Math.ceil(slot.count / 2);
+                setCarry({ ...slot, count: take });
+                next[idx] = { ...slot, count: slot.count - take };
+            } else {
+                setCarry(slot);
+                next[idx] = null;
+            }
+            setArr(type, next);
+            return;
+        }
+
+        // Has carry — place
+        let newCarry = { ...carry };
+        let newSlot  = slot;
+
+        if (rightClick) {
+            if (!newSlot) {
+                newSlot = { ...carry, count: 1 };
+                newCarry.count -= 1;
+            } else if (canStack(newCarry, newSlot)) {
+                newSlot = { ...newSlot, count: newSlot.count + 1 };
+                newCarry.count -= 1;
+            } else {
+                [newSlot, newCarry] = [newCarry, newSlot];
+            }
+        } else {
+            if (!newSlot) {
+                newSlot  = carry;
+                newCarry = null;
+            } else if (canStack(newCarry, newSlot)) {
+                const space = (newSlot.stackSize || MAX_STACK) - newSlot.count;
+                const moved = Math.min(space, newCarry.count);
+                newSlot  = { ...newSlot,  count: newSlot.count + moved };
+                newCarry = newCarry.count - moved > 0 ? { ...newCarry, count: newCarry.count - moved } : null;
+            } else {
+                [newSlot, newCarry] = [newCarry, newSlot];
+            }
+        }
+
+        if (newCarry?.count <= 0) newCarry = null;
+        next[idx] = newSlot;
+        setArr(type, next);
+        setCarry(newCarry);
+    }, [carry, filteredItems, inv, hotbar, craftGrid, chestInv, getArr, setArr]);
+
+    // ── Drag & drop ──────────────────────────────────────────────────────────
+
+    const handleDrop = useCallback((dstType, dstIdx) => {
+        const src = dragSrc.current;
+        if (!src) return;
+        const { type: srcType, idx: srcIdx } = src;
+        if (srcType === dstType && srcIdx === dstIdx) return;
+
+        if (srcType === 'creative') {
+            const item = filteredItems[srcIdx];
+            if (!item) return;
+            const dstArr = [...getArr(dstType)];
+            dstArr[dstIdx] = { ...item, count: item.stackSize || MAX_STACK };
+            setArr(dstType, dstArr);
+            return;
+        }
+
+        const srcArr = [...getArr(srcType)];
+        const dstArr = srcType === dstType ? srcArr : [...getArr(dstType)];
+        const sItem = srcArr[srcIdx] ? { ...srcArr[srcIdx] } : null;
+        const dItem = dstArr[dstIdx] ? { ...dstArr[dstIdx] } : null;
         if (!sItem) return;
 
-        if (!tItem) {
-            tTarget[targetIdx] = { ...sItem };
-            sTarget[sourceIdx] = null;
-        } else if (sItem.id === tItem.id && tItem.count < (tItem.stackSize || MAX_STACK)) {
-            const space = (tItem.stackSize || MAX_STACK) - tItem.count;
+        if (!dItem) {
+            dstArr[dstIdx] = sItem;
+            srcArr[srcIdx] = null;
+        } else if (canStack(sItem, dItem)) {
+            const space = (dItem.stackSize || MAX_STACK) - dItem.count;
             const moved = Math.min(space, sItem.count);
-            tItem.count += moved;
-            sItem.count -= moved;
-            if (sItem.count <= 0) sTarget[sourceIdx] = null;
+            dstArr[dstIdx] = { ...dItem, count: dItem.count + moved };
+            srcArr[srcIdx] = sItem.count - moved > 0 ? { ...sItem, count: sItem.count - moved } : null;
         } else {
-            // Swap
-            sTarget[sourceIdx] = { ...tItem };
-            tTarget[targetIdx] = { ...sItem };
+            srcArr[srcIdx] = dItem;
+            dstArr[dstIdx] = sItem;
         }
 
-        getUpdateFn(sourceType)();
-        if (sourceType !== targetType) getUpdateFn(targetType)();
-        engine.player.dirty = true;
-    };
+        setArr(srcType, srcArr);
+        if (srcType !== dstType) setArr(dstType, dstArr);
+    }, [filteredItems, getArr, setArr]);
 
-    const handleCraftingResultClick = (isShiftClick = false) => {
-        if (!craftingResult) return;
-        
-        const processOnce = () => {
-            const { result } = craftingResult;
-            if (carryItem && (carryItem.id !== result.id || carryItem.count + result.count > MAX_STACK)) return false;
+    // ── Crafting result ──────────────────────────────────────────────────────
 
-            if (!carryItem) {
-                setCarryItem({ ...result });
-            } else {
-                carryItem.count += result.count;
-            }
-
-            // Consume ingredients
-            const isBench = container.type === 'crafting_table';
-            const indices = isBench ? [0,1,2,3,4,5,6,7,8] : [0,1,3,4];
-            const newGrid = [...craftingGrid];
+    const consumeCraft = useCallback(() => {
+        const isBench = container?.type === 'crafting_table';
+        const indices = isBench ? [0,1,2,3,4,5,6,7,8] : [0,1,3,4];
+        setCraftGrid(prev => {
+            const next = [...prev];
             indices.forEach(i => {
-                if (newGrid[i]) {
-                    newGrid[i].count--;
-                    if (newGrid[i].count <= 0) newGrid[i] = null;
+                if (next[i]) {
+                    next[i] = next[i].count > 1 ? { ...next[i], count: next[i].count - 1 } : null;
                 }
             });
-            setCraftingGrid(newGrid);
-            return true;
-        };
+            return next;
+        });
+    }, [container]);
 
-        if (isShiftClick) {
-            // Craft as much as possible and put in inventory
-            while (craftingResult) {
-                const { result } = craftingResult;
-                const canAdd = engine.player.addItem({ ...result });
-                if (!canAdd) break;
-
-                // Consume ingredients
-                const isBench = container.type === 'crafting_table';
-                const indices = isBench ? [0,1,2,3,4,5,6,7,8] : [0,1,3,4];
-                const newGrid = [...craftingGrid];
-                indices.forEach(i => {
-                    if (newGrid[i]) {
-                        newGrid[i].count--;
-                        if (newGrid[i].count <= 0) newGrid[i] = null;
-                    }
-                });
-                setCraftingGrid(newGrid);
-                // The re-run of useMemo will update craftingResult for the next iteration
+    const handleCraftClick = useCallback((shiftKey = false) => {
+        if (!craftResult) return;
+        const { result } = craftResult;
+        if (shiftKey) {
+            // Auto-craft into inventory
+            const iNext = [...inv];
+            let crafted = true;
+            while (crafted && craftResult) {
+                const slot = iNext.findIndex(s => !s || (s.id === result.id && s.count < (s.stackSize || MAX_STACK)));
+                if (slot === -1) break;
+                if (!iNext[slot]) iNext[slot] = { ...result };
+                else iNext[slot] = { ...iNext[slot], count: iNext[slot].count + result.count };
+                consumeCraft();
+                crafted = !!craftResult;
             }
+            setArr('inv', iNext);
         } else {
-            processOnce();
+            if (carry && (carry.id !== result.id || carry.count + result.count > MAX_STACK)) return;
+            setCarry(prev => prev ? { ...prev, count: prev.count + result.count } : { ...result });
+            consumeCraft();
         }
-    };
+    }, [craftResult, carry, inv, consumeCraft, setArr]);
+
+    // ── Slot shorthand ────────────────────────────────────────────────────────
+    const S = (type, i) => ({
+        item:        getArr(type)?.[i] ?? null,
+        onHover:     setHovered,
+        onClick:     (rc, sc) => handleClick(type, i, rc, sc),
+        onDragStart: () => { dragSrc.current = { type, idx: i }; },
+        onDrop:      () => handleDrop(type, i),
+    });
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto">
-            <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                layoutId="inventory-card"
-                className="inventory-card"
-            >
-                {/* Close Button */}
-                <button onClick={onClose} className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-2xl transition-colors text-white/40 hover:text-white z-50">
-                    <X size={24} />
-                </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
 
-                <div className="flex gap-8 h-full">
-                    {/* Sidebar Tabs */}
-                    <div className="flex flex-col gap-3 border-r border-white/5 pr-6">
-                        <TabButton active={!isCreative} icon={Package} label="Survival" onClick={() => { engine.settings?.set('gameMode', 'survival'); setGameMode('survival'); }} />
-                        <TabButton active={isCreative} icon={Star} label="Creative" onClick={() => { engine.settings?.set('gameMode', 'creative'); setGameMode('creative'); }} />
-                        
-                        <div className="h-px bg-white/5 my-4" />
-                        
-                        {isCreative && CATEGORIES.map(cat => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setActiveCategory(cat.id)}
-                                className={`p-4 rounded-2xl transition-all flex flex-col items-center gap-1 group
-                                    ${activeCategory === cat.id ? 'bg-sky-500 text-white shadow-lg' : 'text-white/20 hover:text-white/40 hover:bg-white/5'}`}
-                            >
-                                <cat.icon size={20} />
+            <div style={{ background:'#1a1a2e', border:'2px solid #2a2a4a', borderRadius:12, padding:24, minWidth:620, maxHeight:'90vh', overflowY:'auto' }}
+                className="relative select-none">
+
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-white font-black uppercase tracking-widest text-sm">
+                            {isCreative ? 'Creative' : 'Inventory'}
+                        </h2>
+                        {hovered && <span className="text-sky-400 text-xs font-bold opacity-60">— {hovered.name}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {['survival','creative'].map(m => (
+                            <button key={m} onClick={() => { engine.settings?.set('gameMode', m); setGameMode(m); }}
+                                className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${gameMode===m ? 'bg-sky-600 text-white' : 'text-white/30 hover:text-white/60'}`}>
+                                {m}
                             </button>
                         ))}
-                    </div>
-
-                    <div className="flex flex-col gap-6 flex-1 min-w-0">
-                        {/* Header */}
-                        <div className="flex justify-between items-center h-12">
-                            <div className="flex flex-col">
-                                <h2 className="text-2xl font-black italic tracking-tighter uppercase text-white flex items-center gap-3">
-                                    {isCreative ? 'Creative Inventory' : 'Inventory'}
-                                </h2>
-                                <AnimatePresence mode="wait">
-                                    {hoveredItem && (
-                                        <motion.span 
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: 10 }}
-                                            className="text-[10px] font-bold text-sky-400 uppercase tracking-[0.3em]"
-                                        >
-                                            {hoveredItem.name} <span className="text-white/20 mx-2">|</span> {hoveredItem.category || 'Misc'}
-                                        </motion.span>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                            
-                            {isCreative && (
-                                <div className="relative w-72">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={16} />
-                                    <input 
-                                        type="text"
-                                        placeholder="Search archives..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm text-white focus:outline-none focus:border-sky-500/50 transition-colors"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex gap-8">
-                            {/* Main Grid Area */}
-                            <div className="flex-1">
-                                {isCreative ? (
-                                    <div className="grid grid-cols-6 md:grid-cols-9 gap-2 max-h-[40vh] overflow-y-auto p-1 custom-scrollbar">
-                                        {filteredItems.map((item, i) => (
-                                            <Slot key={`creative-${i}`} item={item} onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('creative', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'creative'); e.dataTransfer.setData('sIdx', i); }} />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col gap-6">
-                                        <div className="flex gap-8 items-start">
-                                            {/* Armor */}
-                                            <div className="flex flex-col gap-2">
-                                                {[...Array(4)].map((_, i) => <Slot key={`armor-${i}`} onHover={setHoveredItem} icon={<Shield className="w-5 h-5 text-white/10" />} />)}
-                                            </div>
-                                            {/* Player Preview */}
-                                            <div className="w-36 h-56 bg-black/20 rounded-[32px] border border-white/5 flex items-center justify-center relative overflow-hidden">
-                                                <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 to-transparent" />
-                                                <span className="text-[10px] text-white/10 uppercase tracking-[0.3em] font-black rotate-90">Biological</span>
-                                            </div>
-                                            {/* Crafting */}
-                                            <div className="flex flex-col gap-3 items-center">
-                                                <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Crafting</span>
-                                                <div className="grid grid-cols-2 gap-2 p-4 bg-white/5 rounded-3xl border border-white/5">
-                                                    {[0,1,3,4].map(i => (
-                                                        <Slot key={`craft-${i}`} item={craftingGrid[i]} onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('crafting', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'crafting'); e.dataTransfer.setData('sIdx', i); }} onDrop={(e) => handleDragDrop(e.dataTransfer.getData('sType'), parseInt(e.dataTransfer.getData('sIdx')), 'crafting', i)} />
-                                                    ))}
-                                                </div>
-                                                <div className="w-14 h-14 bg-sky-500/10 border border-sky-400/20 rounded-2xl flex items-center justify-center shadow-lg cursor-pointer" onClick={(e) => handleCraftingResultClick(e.shiftKey)}>
-                                                    {craftingResult && <SlotItem item={craftingResult.result} />}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Workbench (If active) */}
-                            {container.type === 'crafting_table' && (
-                                <div className="flex flex-col gap-3 items-center p-6 bg-sky-500/5 rounded-[40px] border border-sky-400/10">
-                                    <span className="text-[10px] font-bold text-sky-400/60 uppercase tracking-widest">Crafting Table</span>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {Array.from({ length: 9 }).map((_, i) => (
-                                            <Slot key={`bench-${i}`} item={craftingGrid[i]} onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('crafting', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'crafting'); e.dataTransfer.setData('sIdx', i); }} onDrop={(e) => handleDragDrop(e.dataTransfer.getData('sType'), parseInt(e.dataTransfer.getData('sIdx')), 'crafting', i)} />
-                                        ))}
-                                    </div>
-                                    <div className="w-16 h-16 bg-sky-500/20 border border-sky-400/40 rounded-2xl flex items-center justify-center shadow-2xl cursor-pointer" onClick={(e) => handleCraftingResultClick(e.shiftKey)}>
-                                        {craftingResult && <SlotItem item={craftingResult.result} size="large" />}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Chest Inventory (If active) */}
-                            {container.type === 'chest' && (
-                                <div className="flex flex-col gap-3 items-center p-6 bg-amber-500/5 rounded-[40px] border border-amber-400/10">
-                                    <h3 className="text-amber-400 text-sm font-black uppercase tracking-widest">{container.title || 'Chest'}</h3>
-                                    <div className="grid grid-cols-9 gap-2">
-                                        {(container.inventory || Array(27).fill(null)).map((item, i) => (
-                                            <Slot key={`chest-${i}`} item={item} onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('container', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'container'); e.dataTransfer.setData('sIdx', i); }} onDrop={(e) => handleDragDrop(e.dataTransfer.getData('sType'), parseInt(e.dataTransfer.getData('sIdx')), 'container', i)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <hr className="border-white/5" />
-
-                        {/* Player Storage */}
-                            <div className="flex flex-col gap-6">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Inventory</span>
-                                        <button 
-                                            onClick={() => engine.player.sortInventory()}
-                                            className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[8px] font-bold text-white/30 hover:text-white uppercase tracking-widest transition-all active:scale-95"
-                                        >
-                                            Sort & Stack
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-9 gap-2">
-                                        {inventory.map((item, i) => (
-                                            <Slot key={`inv-${i}`} item={item} onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('inventory', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'inventory'); e.dataTransfer.setData('sIdx', i); }} onDrop={(e) => handleDragDrop(e.dataTransfer.getData('sType'), parseInt(e.dataTransfer.getData('sIdx')), 'inventory', i)} />
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <span className="text-[10px] font-bold text-sky-400/60 uppercase tracking-widest">Hotbar</span>
-                                    <div className="grid grid-cols-9 gap-2">
-                                        {hotbar.map((item, i) => (
-                                            <Slot key={`hot-${i}`} item={item} highlight onHover={setHoveredItem} onClick={(rc, sc) => handleSlotClick('hotbar', i, rc, sc)} onDragStart={(e) => { e.dataTransfer.setData('sType', 'hotbar'); e.dataTransfer.setData('sIdx', i); }} onDrop={(e) => handleDragDrop(e.dataTransfer.getData('sType'), parseInt(e.dataTransfer.getData('sIdx')), 'hotbar', i)} />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                        <button onClick={onClose} className="ml-2 p-1 rounded hover:bg-white/10 text-white/40 hover:text-white transition-colors">
+                            <X size={18} />
+                        </button>
                     </div>
                 </div>
-            </motion.div>
 
-            {/* Carry Ghost */}
-            {carryItem && (
-                <div className="fixed pointer-events-none z-[1000] -translate-x-1/2 -translate-y-1/2" style={{ left: mousePos.x, top: mousePos.y }}>
-                    <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20 shadow-2xl">
-                        <SlotItem item={carryItem} />
+                {isCreative ? (
+                    <div className="flex flex-col gap-3 mb-4">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {CATEGORIES.map(c => (
+                                <button key={c.id} onClick={() => setCategory(c.id)}
+                                    className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${category===c.id ? 'bg-sky-600 text-white' : 'bg-white/5 text-white/30 hover:text-white/60'}`}>
+                                    {c.label}
+                                </button>
+                            ))}
+                            <div className="relative ml-auto">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-white/30" size={12} />
+                                <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
+                                    className="bg-black/40 border border-white/10 rounded pl-7 pr-3 py-1 text-xs text-white placeholder-white/20 focus:outline-none focus:border-sky-500/50 w-36" />
+                            </div>
+                        </div>
+                        <div className="grid gap-1 overflow-y-auto max-h-52 pr-1" style={{ gridTemplateColumns:'repeat(9,44px)' }}>
+                            {filteredItems.map((_, i) => <Slot key={`cr-${i}`} {...S('creative', i)} />)}
+                        </div>
                     </div>
+                ) : (
+                    <div className="flex gap-5 items-start mb-4">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-white/20 text-[9px] font-black uppercase tracking-widest mb-1">Armor</span>
+                            {[0,1,2,3].map(i => <Slot key={i} icon={<Shield size={14} className="text-white/15"/>} onHover={setHovered} />)}
+                        </div>
+                        <div className="w-24 h-36 rounded-lg border border-white/5 bg-black/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white/10 text-[9px] font-black uppercase tracking-widest rotate-90">Player</span>
+                        </div>
+                        <div className="flex flex-col gap-2 items-center">
+                            <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">Craft</span>
+                            <div className="grid grid-cols-2 gap-1">
+                                {[0,1,3,4].map(i => <Slot key={i} {...S('crafting', i)} />)}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1">
+                                <ArrowRight size={14} className="text-white/20" />
+                                <CraftSlot result={craftResult} onClick={(e) => handleCraftClick(e.shiftKey)} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="h-px bg-white/5 mb-3" />
+
+                {/* Chest */}
+                {container?.type === 'chest' && (
+                    <div className="mb-3">
+                        <span className="text-amber-400/60 text-[9px] font-black uppercase tracking-widest block mb-2">{container.title || 'Chest'}</span>
+                        <div className="grid gap-1" style={{ gridTemplateColumns:'repeat(9,44px)' }}>
+                            {Array.from({length:27}).map((_,i) => <Slot key={i} {...S('chest', i)} />)}
+                        </div>
+                        <div className="h-px bg-white/5 my-3" />
+                    </div>
+                )}
+
+                {/* Crafting table */}
+                {container?.type === 'crafting_table' && (
+                    <div className="flex gap-4 items-center mb-4">
+                        <div>
+                            <span className="text-sky-400/60 text-[9px] font-black uppercase tracking-widest block mb-2">Crafting Table</span>
+                            <div className="grid grid-cols-3 gap-1">
+                                {Array.from({length:9}).map((_,i) => <Slot key={i} {...S('crafting', i)} />)}
+                            </div>
+                        </div>
+                        <ArrowRight size={20} className="text-white/20 flex-shrink-0" />
+                        <CraftSlot result={craftResult} onClick={(e) => handleCraftClick(e.shiftKey)} large />
+                    </div>
+                )}
+
+                {/* Inventory 3×9 */}
+                <div className="mb-2">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-white/20 text-[9px] font-black uppercase tracking-widest">Inventory</span>
+                        <button onClick={() => { engine.player?.sortInventory?.(); setInv([...(engine.player?.inventory||[])]); }}
+                            className="text-[9px] text-white/20 hover:text-white/50 font-black uppercase tracking-widest transition-colors">Sort</button>
+                    </div>
+                    <div className="grid gap-1" style={{ gridTemplateColumns:'repeat(9,44px)' }}>
+                        {Array.from({length:27}).map((_,i) => <Slot key={i} {...S('inv', i)} />)}
+                    </div>
+                </div>
+
+                {/* Hotbar */}
+                <div>
+                    <span className="text-sky-400/40 text-[9px] font-black uppercase tracking-widest block mb-1">Hotbar</span>
+                    <div className="grid gap-1" style={{ gridTemplateColumns:'repeat(9,44px)' }}>
+                        {Array.from({length:9}).map((_,i) => <Slot key={i} {...S('hotbar', i)} highlight />)}
+                    </div>
+                </div>
+            </div>
+
+            {/* Cursor carry ghost */}
+            {carry && (
+                <div className="fixed pointer-events-none z-[200]"
+                    style={{ left: mousePos.x - 22, top: mousePos.y - 22 }}>
+                    <SlotItem item={carry} />
                 </div>
             )}
         </div>
     );
 };
 
-const Slot = ({ item, highlight, icon, onClick, onHover, onDragStart, onDrop }) => (
-    <motion.div 
-        draggable={!!item}
-        onDragStart={onDragStart}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-        onClick={(e) => onClick?.(false, e.shiftKey)}
-        onContextMenu={(e) => { e.preventDefault(); onClick?.(true, e.shiftKey); }}
-        onMouseEnter={() => onHover?.(item)}
-        onMouseLeave={() => onHover?.(null)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center relative cursor-pointer transition-all
-            ${highlight ? 'bg-sky-500/10 border border-sky-400/20 shadow-[0_0_15px_rgba(56,189,248,0.1)]' : 'bg-black/40 border border-white/5 hover:border-white/20'}`}
-    >
-        {icon && !item && icon}
-        {item && <SlotItem item={item} />}
-    </motion.div>
+// ── Slot ──────────────────────────────────────────────────────────────────────
+
+const Slot = ({ item, highlight, icon, onClick, onHover, onDragStart, onDrop }) => {
+    const [hover, setHover] = useState(false);
+    return (
+        <div
+            draggable={!!item}
+            onDragStart={(e) => { e.stopPropagation(); onDragStart?.(); }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); onDrop?.(); }}
+            onClick={(e) => { e.stopPropagation(); onClick?.(false, e.shiftKey); }}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(true, e.shiftKey); }}
+            onMouseEnter={() => { setHover(true);  onHover?.(item ?? null); }}
+            onMouseLeave={() => { setHover(false); onHover?.(null); }}
+            style={{
+                width: 44, height: 44, flexShrink: 0,
+                background: highlight ? 'rgba(56,189,248,0.08)' : hover ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.35)',
+                border: `1.5px solid ${highlight ? (hover ? 'rgba(56,189,248,0.5)' : 'rgba(56,189,248,0.25)') : (hover ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.07)')}`,
+                borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', cursor: 'pointer', boxSizing: 'border-box', transition: 'background 0.1s, border-color 0.1s',
+            }}
+        >
+            {!item && icon}
+            {item && <SlotItem item={item} />}
+        </div>
+    );
+};
+
+// ── Craft output slot ────────────────────────────────────────────────────────
+
+const CraftSlot = ({ result, onClick, large }) => (
+    <div onClick={onClick} style={{
+        width: large ? 52 : 44, height: large ? 52 : 44,
+        background: result ? 'rgba(56,189,248,0.12)' : 'rgba(0,0,0,0.2)',
+        border: `1.5px solid ${result ? 'rgba(56,189,248,0.4)' : 'rgba(255,255,255,0.05)'}`,
+        borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: result ? 'pointer' : 'default', transition: 'all 0.15s',
+    }}>
+        {result && <SlotItem item={result.result} />}
+    </div>
 );
 
-const SlotItem = ({ item, size }) => {
-    const getTexturePath = (id, texture) => {
-        const fileName = texture || id;
-        return `/textures/items/${fileName}.png`;
-    };
+// ── SlotItem ──────────────────────────────────────────────────────────────────
 
+const SlotItem = ({ item }) => {
+    const triedFallback = useRef(false);
+    useEffect(() => { triedFallback.current = false; }, [item?.id]);
     return (
-        <div className="flex flex-col items-center pointer-events-none relative">
-            <img 
-                src={getTexturePath(item.id, item.texture)} 
-                className={`${size === 'large' ? 'w-10 h-10' : 'w-8 h-8'} object-contain drop-shadow-md`}
-                style={{ imageRendering: 'pixelated' }}
-                onError={(e) => { 
-                    const fileName = item.texture || item.id;
-                    if (e.target.src.includes('/items/')) {
-                        // Fallback to blocks directory
-                        e.target.src = `/textures/packs/igneous/blocks/${fileName}.png`;
-                    } else if (!e.target.src.includes('grass_block_side')) {
-                        // Final fallback to a generic item texture if available
-                        e.target.src = '/textures/packs/igneous/blocks/grass_block_side.png';
+        <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', width:34, height:34 }}>
+            <img src={`/textures/items/${item.texture || item.id}.png`}
+                style={{ width:30, height:30, objectFit:'contain', imageRendering:'pixelated' }}
+                onError={(e) => {
+                    if (!triedFallback.current) {
+                        triedFallback.current = true;
+                        e.target.src = `/textures/packs/igneous/blocks/${item.texture || item.id}.png`;
                     }
                 }}
             />
             {item.count > 1 && (
-                <span className="absolute -bottom-1 -right-1 text-[11px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,1)] font-mono">
+                <span style={{ position:'absolute', bottom:-2, right:-2, fontSize:10, fontWeight:900, color:'#fff', textShadow:'1px 1px 0 #000,-1px -1px 0 #000', fontFamily:'monospace', lineHeight:1 }}>
                     {item.count}
                 </span>
             )}
         </div>
     );
 };
-
-const TabButton = ({ active, onClick, icon: Icon, label }) => (
-    <button
-        onClick={onClick}
-        className={`p-4 rounded-[24px] transition-all flex flex-col items-center gap-1 group
-            ${active ? 'bg-sky-500 text-white shadow-lg' : 'text-white/20 hover:text-white/40 hover:bg-white/5'}`}
-    >
-        <Icon size={20} />
-        <span className="text-[8px] font-black uppercase tracking-tighter mt-1">{label}</span>
-    </button>
-);
