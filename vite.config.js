@@ -1,8 +1,8 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  base: '/voxelforge/',
   plugins: [react()],
   server: { port: 3000, open: true },
   build: {
@@ -11,7 +11,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          babylon: ['@babylonjs/core'],
           react: ['react', 'react-dom', 'framer-motion'],
           peerjs: ['peerjs'],
         },
