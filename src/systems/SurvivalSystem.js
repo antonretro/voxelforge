@@ -15,10 +15,11 @@ export class SurvivalSystem {
         engine.on('tick', dt => this.update(dt));
     }
 
-    takeDamage(amount) {
+    takeDamage(amount, cause = 'generic') {
         if (this.isDead || this._peaceful) return;
         this.health = Math.max(0, this.health - amount);
         this._lastDamageAt = performance.now();
+        this._lastCause = cause;
         this.engine.emit('playerDamage', amount);
         if (this.health <= 0) this._die();
     }
@@ -73,12 +74,18 @@ export class SurvivalSystem {
 
         // Starvation: 1 damage per 4 s when fully hungry
         if (this.hunger <= 0 && now - this._lastDamageAt > 4_000) {
-            this.takeDamage(1);
+            this.takeDamage(1, 'starve');
+        }
+
+        // Void damage: below Y = 0
+        const py = this.engine.camera?.position?.y ?? 0;
+        if (py < 0 && now - this._lastDamageAt > 500) {
+            this.takeDamage(4, 'void');
         }
     }
 
     _die() {
         this.isDead = true;
-        this.engine.emit('playerDeath');
+        this.engine.emit('playerDeath', { cause: this._lastCause ?? 'generic' });
     }
 }

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, Search, Shield, ArrowRight } from 'lucide-react';
+import { X, Search, Shield, ArrowRight, Flame } from 'lucide-react';
 import { ITEMS } from '../../data/items.js';
 import { CraftingSystem } from '../../systems/CraftingSystem.js';
 import { RECIPE_BOOK } from '../../data/recipeBook.js';
+import { SMELTING_RECIPES } from '../../systems/SmeltingSystem.js';
 
 const craftingSystem = new CraftingSystem(RECIPE_BOOK);
+
+const FUEL_IDS = new Set(['coal','charcoal','oak_log','spruce_log','birch_log','jungle_log','acacia_log','dark_oak_log','mangrove_log','cherry_log','oak_planks','spruce_planks','birch_planks','jungle_planks','acacia_planks','stick']);
 const MAX_STACK = 64;
 
 const CATEGORIES = [
@@ -38,7 +41,10 @@ export const Inventory = ({ engine, onClose }) => {
     const [search,    setSearch]    = useState('');
 
     const container = engine.activeContainer || null;
-    const [chestInv, setChestInv] = useState(() => container?.inventory ? [...container.inventory] : Array(27).fill(null));
+    const [chestInv,      setChestInv]      = useState(() => container?.inventory     ? [...container.inventory]  : Array(27).fill(null));
+    const [furnaceInput,  setFurnaceInput]  = useState(() => container?.furnaceInput  ?? null);
+    const [furnaceFuel,   setFurnaceFuel]   = useState(() => container?.furnaceFuel   ?? null);
+    const [furnaceOutput, setFurnaceOutput] = useState(() => container?.furnaceOutput ?? null);
 
     const dragSrc = useRef(null);
 
@@ -105,6 +111,34 @@ export const Inventory = ({ engine, onClose }) => {
             : [craftGrid[0], craftGrid[1], null, craftGrid[3], craftGrid[4], null, null, null, null];
         return craftingSystem.match(grid);
     }, [craftGrid, container]);
+
+    // ── Furnace smelt handler ────────────────────────────────────────────────
+    const handleSmelt = useCallback(() => {
+        if (!furnaceInput || !furnaceFuel) return;
+        if (!FUEL_IDS.has(furnaceFuel.id)) return;
+        const recipe = SMELTING_RECIPES[furnaceInput.id];
+        if (!recipe) return;
+
+        const newInput  = furnaceInput.count  > 1 ? { ...furnaceInput,  count: furnaceInput.count  - 1 } : null;
+        const newFuel   = furnaceFuel.count   > 1 ? { ...furnaceFuel,   count: furnaceFuel.count   - 1 } : null;
+        const resultId  = recipe.result;
+        const newOutput = furnaceOutput?.id === resultId
+            ? { ...furnaceOutput, count: Math.min(64, furnaceOutput.count + 1) }
+            : { id: resultId, count: 1 };
+
+        setFurnaceInput(newInput);
+        setFurnaceFuel(newFuel);
+        setFurnaceOutput(newOutput);
+        if (container) {
+            container.furnaceInput  = newInput;
+            container.furnaceFuel   = newFuel;
+            container.furnaceOutput = newOutput;
+        }
+    }, [furnaceInput, furnaceFuel, furnaceOutput, container]);
+
+    const canSmelt = furnaceInput && furnaceFuel
+        && FUEL_IDS.has(furnaceFuel.id)
+        && !!SMELTING_RECIPES[furnaceInput.id];
 
     // ── Helpers to get/set a slot array by name ──────────────────────────────
 
@@ -383,6 +417,59 @@ export const Inventory = ({ engine, onClose }) => {
                         </div>
                         <ArrowRight size={20} className="text-white/20 flex-shrink-0" />
                         <CraftSlot result={craftResult} onClick={(e) => handleCraftClick(e.shiftKey)} large />
+                    </div>
+                )}
+
+                {/* Furnace */}
+                {container?.type === 'furnace' && (
+                    <div className="flex gap-4 items-center mb-4">
+                        <div>
+                            <span className="text-orange-400/60 text-[9px] font-black uppercase tracking-widest block mb-2">Furnace</span>
+                            <div className="flex flex-col gap-1">
+                                {/* Input slot */}
+                                <Slot
+                                    item={furnaceInput} locked={false}
+                                    onHover={setHovered}
+                                    onClick={() => {
+                                        if (carry && !furnaceInput) { setFurnaceInput(carry); setCarry(null); if (container) container.furnaceInput = carry; }
+                                        else if (!carry && furnaceInput) { setCarry(furnaceInput); setFurnaceInput(null); if (container) container.furnaceInput = null; }
+                                    }}
+                                />
+                                {/* Flame icon */}
+                                <div className="w-11 h-5 flex items-center justify-center">
+                                    <Flame size={14} className={canSmelt ? 'text-orange-400 animate-pulse' : 'text-white/10'} />
+                                </div>
+                                {/* Fuel slot */}
+                                <Slot
+                                    item={furnaceFuel} locked={false}
+                                    onHover={setHovered}
+                                    onClick={() => {
+                                        if (carry && !furnaceFuel) { setFurnaceFuel(carry); setCarry(null); if (container) container.furnaceFuel = carry; }
+                                        else if (!carry && furnaceFuel) { setCarry(furnaceFuel); setFurnaceFuel(null); if (container) container.furnaceFuel = null; }
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-2">
+                            <ArrowRight size={20} className="text-white/20" />
+                            <button
+                                onClick={handleSmelt}
+                                disabled={!canSmelt}
+                                className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg transition-colors disabled:opacity-20 disabled:cursor-not-allowed bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 border border-orange-500/20"
+                            >
+                                Smelt
+                            </button>
+                        </div>
+
+                        {/* Output slot */}
+                        <Slot
+                            item={furnaceOutput} locked={false}
+                            onHover={setHovered}
+                            onClick={() => {
+                                if (!carry && furnaceOutput) { setCarry(furnaceOutput); setFurnaceOutput(null); if (container) container.furnaceOutput = null; }
+                            }}
+                        />
                     </div>
                 )}
 

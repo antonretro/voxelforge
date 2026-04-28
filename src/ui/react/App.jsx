@@ -17,6 +17,7 @@ const isTouchDevice = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in wi
 
 export const App = ({ engine }) => {
     const [gameState,    setGameState]    = useState('menu');
+    const [deathCause,   setDeathCause]   = useState('generic');
     const [showInventory,setShowInventory]= useState(false);
     const [chatOpen,     setChatOpen]     = useState(false);
     const [showF3,       setShowF3]       = useState(false);
@@ -64,7 +65,7 @@ export const App = ({ engine }) => {
         };
 
         const onInventoryToggle = (visible) => setShowInventory(visible);
-        const onPlayerDeath     = ()         => setGameState('dead');
+        const onPlayerDeath     = ({ cause } = {}) => { setDeathCause(cause ?? 'generic'); setGameState('dead'); };
         const onOpenChat        = ()         => { setChatOpen(true);  if (engine.controls) engine.controls.chatOpen = true;  };
         const onCloseChat       = ()         => { setChatOpen(false); if (engine.controls) engine.controls.chatOpen = false; };
         const onToggleF3        = ()         => setShowF3(v => !v);
@@ -198,7 +199,7 @@ export const App = ({ engine }) => {
             <AnimatePresence>
                 {gameState === 'dead' && (
                     <motion.div key="dead" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <DeathScreen engine={engine} onRespawn={handleRespawn} />
+                        <DeathScreen engine={engine} onRespawn={handleRespawn} cause={deathCause} />
                     </motion.div>
                 )}
             </AnimatePresence>

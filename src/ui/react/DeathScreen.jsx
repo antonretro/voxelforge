@@ -1,24 +1,34 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, LogOut, Skull } from 'lucide-react';
+import { RefreshCw, LogOut } from 'lucide-react';
 
-export const DeathScreen = ({ engine, onRespawn }) => {
+const MESSAGES = {
+    fall:    (n) => `${n} fell from a high place`,
+    void:    (n) => `${n} fell out of the world`,
+    starve:  (n) => `${n} starved to death`,
+    drown:   (n) => `${n} drowned`,
+    generic: (n) => `${n} died`,
+};
+
+export const DeathScreen = ({ engine, onRespawn, cause = 'generic' }) => {
     const [timeSurvived, setTimeSurvived] = useState('');
 
     useEffect(() => {
-        // Show how long the session lasted
         const started = engine.currentWorld?._startTime;
         if (started) {
             const secs = Math.floor((Date.now() - started) / 1000);
-            const m    = Math.floor(secs / 60);
-            const s    = secs % 60;
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
             setTimeSurvived(`${m}m ${s}s`);
         }
     }, [engine]);
 
+    const name = engine.settings?.get('playerName') || 'Player';
+    const msgFn = MESSAGES[cause] ?? MESSAGES.generic;
+    const message = msgFn(name);
+
     return (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-red-950/30 backdrop-blur-sm">
-            {/* Vignette */}
             <div className="absolute inset-0 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(80,0,0,0.7) 100%)' }}
             />
@@ -29,15 +39,6 @@ export const DeathScreen = ({ engine, onRespawn }) => {
                 transition={{ type: 'spring', stiffness: 260, damping: 22, delay: 0.1 }}
                 className="relative z-10 flex flex-col items-center gap-8 text-center px-8"
             >
-                {/* Icon */}
-                <motion.div
-                    animate={{ rotate: [0, -5, 5, -3, 3, 0] }}
-                    transition={{ duration: 0.6, delay: 0.3 }}
-                    className="text-red-500"
-                >
-                    <Skull className="w-20 h-20 drop-shadow-[0_0_40px_rgba(239,68,68,0.8)]" />
-                </motion.div>
-
                 {/* Title */}
                 <div>
                     <motion.h1
@@ -48,12 +49,23 @@ export const DeathScreen = ({ engine, onRespawn }) => {
                     >
                         You Died!
                     </motion.h1>
+
+                    {/* Minecraft-style cause message */}
+                    <motion.p
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className="text-white/70 text-lg font-semibold mt-4"
+                    >
+                        {message}
+                    </motion.p>
+
                     {timeSurvived && (
                         <motion.p
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5 }}
-                            className="text-white/40 text-sm font-medium mt-3"
+                            className="text-white/40 text-sm font-medium mt-2"
                         >
                             Survived for <span className="text-white/60 font-bold">{timeSurvived}</span>
                         </motion.p>

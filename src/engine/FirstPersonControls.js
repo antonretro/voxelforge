@@ -14,6 +14,29 @@ const SPRINT_SPEED =  0.15;
 // Tool tier by item-id fragment: wood=1 stone=2 iron=3 diamond=4 netherite=5
 const TOOL_TIER = { wooden: 1, wood: 1, stone: 2, iron: 3, diamond: 4, netherite: 5 };
 
+// Block name → dropped item id. If missing, block drops itself.
+const BLOCK_DROPS = {
+  coal_ore:               'coal',
+  deepslate_coal_ore:     'coal',
+  iron_ore:               'raw_iron',
+  deepslate_iron_ore:     'raw_iron',
+  gold_ore:               'raw_gold',
+  deepslate_gold_ore:     'raw_gold',
+  copper_ore:             'raw_copper',
+  deepslate_copper_ore:   'raw_copper',
+  diamond_ore:            'diamond',
+  deepslate_diamond_ore:  'diamond',
+  emerald_ore:            'emerald',
+  deepslate_emerald_ore:  'emerald',
+  lapis_ore:              'lapis_lazuli',
+  deepslate_lapis_ore:    'lapis_lazuli',
+  redstone_ore:           'redstone',
+  deepslate_redstone_ore: 'redstone',
+  grass_block:            'dirt',
+  stone:                  'cobblestone',
+  deepslate:              'cobbled_deepslate',
+};
+
 // Minimum tool tier required to get a drop from a block (keyed by block numeric ID).
 // Missing entry = no requirement (drops with bare fist).
 const DROP_REQUIRES = {
@@ -201,7 +224,7 @@ export class FirstPersonControls {
 				// Fall damage — threshold ~3 blocks drop
 				if (!wasOnGround && fallVel < -0.45 && this.gameMode === 'survival') {
 					const dmg = Math.max(1, Math.floor((-fallVel - 0.45) * 20));
-					this.game.survival?.takeDamage(dmg);
+					this.game.survival?.takeDamage(dmg, 'fall');
 				}
 			}
 		}
@@ -322,9 +345,10 @@ export class FirstPersonControls {
 				
 				if (this.gameMode === 'survival') {
 					if (tier >= required) {
-						// Create ItemEntity
+						const dropId = BLOCK_DROPS[block.name] ?? block.name;
+						const dropBlock = dropId !== block.name ? { ...block, name: dropId, drop: dropId } : block;
 						import('./ItemEntity.js').then(({ ItemEntity }) => {
-							const item = new ItemEntity(this.game, block, pos.clone().add(new Vector3(0.5, 0.5, 0.5)));
+							const item = new ItemEntity(this.game, dropBlock, pos.clone().add(new Vector3(0.5, 0.5, 0.5)));
 							this.game._itemEntities.push(item);
 						});
 					}
